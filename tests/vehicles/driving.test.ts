@@ -546,7 +546,9 @@ test('exiting off the street keeps the exact car pose and state replacement rele
     vehicle.model.position.distanceTo(beforeExit) < 0.2,
     'Exit recovery must not jump to the distant street',
   );
-  system.setState(city());
+  const replacement = city();
+  replacement.seed++;
+  system.setState(replacement);
   assert.equal(system.controlsCar(vehicle), false);
   assert.equal(system.getStatus().active, false);
   system.dispose();
@@ -646,4 +648,43 @@ test('traffic handback preserves a curved lane and its real incoming neighbor in
       assert.ok(Math.abs(vehicle.model.position.x - resumed.x + state.size / 2) < 1e-10);
       assert.ok(Math.abs(vehicle.model.position.z - resumed.z + state.size / 2) < 1e-10);
     }
+});
+
+test('held throttle survives immutable simulation snapshots of the same city', () => {
+  let state = city();
+  const vehicle = car(state);
+  const statuses: boolean[] = [];
+  const controller = createDrivingController(state, () => [vehicle], {
+    onStatus: (status) => statuses.push(status.active),
+  });
+  assert.equal(controller.enter(vehicle.model.id), true);
+  controller.keyDown('KeyW');
+  for (let frame = 0; frame < 20; frame++) controller.update(1 / 60);
+  const speed = controller.getStatus().speed;
+  const before = vehicle.model.position.clone();
+  for (let tick = 0; tick < 4; tick++) {
+    state = structuredClone(state);
+    state.month++;
+    state.revision++;
+    const pose = vehicle.model.position.clone();
+    controller.setState(state);
+    assert.equal(controller.active, true, 'a worker snapshot must not exit the car');
+    assert.equal(controller.selectedCar, vehicle);
+    assert.deepEqual(
+      vehicle.model.position,
+      pose,
+      'snapshot application preserves the physical pose',
+    );
+    for (let frame = 0; frame < 8; frame++) controller.update(1 / 60);
+  }
+  assert.ok(
+    controller.getStatus().speed > speed,
+    'held throttle stays active across worker commits',
+  );
+  assert.ok(vehicle.model.position.distanceTo(before) > 0.1);
+  assert.ok(statuses.every(Boolean), 'no transient exit is sent to the application');
+  controller.keyUp('KeyW');
+  controller.keyDown('Escape');
+  assert.equal(controller.active, false, 'explicit exit still works');
+  controller.dispose();
 });

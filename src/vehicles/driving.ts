@@ -1241,7 +1241,9 @@ export function createDrivingController(
     controlsCar,
     setState(next) {
       const nextIdentity = `${next.seed}:${next.size}`;
-      if (next !== state || nextIdentity !== cityIdentity) {
+      // Worker ticks replace the state object while the same city and fleet remain.
+      // Explicit new/imported cities recreate the scene and this controller.
+      if (nextIdentity !== cityIdentity) {
         exit();
         controlled.clear();
         seenCarPoses.clear();
