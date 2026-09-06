@@ -40,13 +40,13 @@ An existing save opens automatically with the simulation paused. On your first v
 2. **Connect power and water.** Roads, electricity, and water pipes are separate networks. Connect the power plant with power lines and the waterworks with pipes. **One power connection serves a connected block:** residential, commercial, and industrial zones sharing tile edges pass electricity to each other, including zoned lots that have not developed yet. Ordinary zoned buildings need no individual overhead cables or service connections, including their high-rises. Roads and open gaps separate blocks unless you explicitly connect them with power lines. Only large facilities with multi-tile footprints can receive a visible dedicated service cable. It terminates at the lot boundary on the same side of the street and must not cross the roadway or another building. Water pipes supply lots within two tiles; the waterworks itself needs power. Explicitly placed utility lines can run beneath roads and buildings, with visible electricity poles in open land. Use the **Power** and **Water** overlays to check coverage.
 3. **Zone land.** For residential, commercial, or industrial zones, drag from one corner to the opposite corner to select a rectangle. Both corner tiles are included, and you can drag in any direction. Moving back toward the starting corner shrinks the area and its cost before you release. Housing attracts residents; commerce and industry provide jobs. Buildings develop automatically when demand, utilities, and happiness are sufficient. Missing utilities can cause them to shrink. Houses, apartments, shops, high-rises, and factories show the city's growth.
 4. **Support quality of life.** Parks, police, fire stations, clinics, and education facilities serve their surroundings. Industry and fossil-fuel power plants pollute nearby lots. City services need roads, power, and water; their budgets determine their effectiveness.
-5. **Balance the budget.** Taxes affect income and happiness. Police, fire, health, and education have separate budgets. Borrow and repay in €10,000 steps, up to €50,000 of debt; monthly interest is 0.5%.
+5. **Balance the budget.** Taxes affect income and happiness. Police, fire, health, and education have separate budgets. Borrow and repay in €10,000 steps, up to €50,000 of debt. Interest is included in the running balance.
 
 Basic utilities provide **6,000 power units per power plant** and **6,000 water units per supplied waterworks**. Later, wind farms provide 1,200 and solar farms 3,200 power units. Check capacity as well as continuous connections: a disconnected network is not supplied by a plant elsewhere on the map.
 
 **Review before building:** the floating preview shows the current area, dimensions, cost, and placement warnings and stays within the visible window. Release over the game world to build. **Right-click or Esc** cancels an unfinished draft while keeping the current tool selected; use **V** or **Select** when you want to inspect lots instead. Releasing over a menu or control panel, outside the playable world, or after an interrupted pointer interaction cancels the draft. Opening a dialog also cancels an unfinished draft.
 
-At **1×**, a game month takes about five seconds. The bottom bar also offers **2×**, **3×**, and pause. Dialogs and a hidden browser tab pause the simulation.
+The bottom bar shows **elapsed simulation time** instead of a fast-forwarding calendar. Income, costs, and balance are shown **per simulation minute**; 1× follows elapsed seconds, while **2×** and **3×** accelerate the simulation. The independent day–night cycle controls the scenery. The existing economic and growth pacing is preserved. Dialogs and a hidden browser tab pause the economic simulation.
 
 ### Terrain and large facilities
 
@@ -56,18 +56,18 @@ Public facilities are **single buildings occupying continuous footprints**. They
 
 **Driveways and yards:** all 13 large facility types support paved access from an adjacent road, including rotated placements. Usable sites have a continuous driveway and ramp into the forecourt or parking area, with the same surface used for the visible pavement and vehicle wheels. Roads may meet the front, side, or rear; the route stays within the existing lot and does not move saved buildings or neighboring tiles. Put a road directly beside the lot and keep a manageable height difference. Industrial buildings have a smaller loading apron; if the road is too steep for a usable ramp, the site is not treated as having a drivable entrance.
 
-| Facility | Footprint | Construction | Operation / month |
+| Facility | Footprint | Construction | Operation / simulation minute |
 | --- | ---: | ---: | ---: |
-| Power plant | 4 × 4 | €6,500 | €320 |
-| Waterworks | 2 × 2 | €2,200 | €180 |
-| Police station | 2 × 2 | €1,900 | €125 |
-| Fire station | 3 × 2 | €1,600 | €95 |
-| Clinic | 3 × 3 | €3,200 | €150 |
-| School | 3 × 2 | €1,800 | €100 |
-| Stadium | 6 × 5 | €9,000 | €180 |
-| Seaport | 5 × 3 | €9,500 | €160 |
-| University | 5 × 4 | €12,000 | €280 |
-| Airport | 10 × 6 | €16,000 | €290 |
+| Power plant | 4 × 4 | €6,500 | €3,840 |
+| Waterworks | 2 × 2 | €2,200 | €2,160 |
+| Police station | 2 × 2 | €1,900 | €1,500 |
+| Fire station | 3 × 2 | €1,600 | €1,140 |
+| Clinic | 3 × 3 | €3,200 | €1,800 |
+| School | 3 × 2 | €1,800 | €1,200 |
+| Stadium | 6 × 5 | €9,000 | €2,160 |
+| Seaport | 5 × 3 | €9,500 | €1,920 |
+| University | 5 × 4 | €12,000 | €3,360 |
+| Airport | 10 × 6 | €16,000 | €3,480 |
 
 Prices are **per facility**; service operating costs assume a 100% budget. A seaport needs at least **two tiles along its quay directly beside water**; press R to rotate the waterfront. The stadium, airport, and seaport have their own details and animations.
 
@@ -87,13 +87,13 @@ Open **City development** using the flag or the city menu. Population determines
 
 You can also attempt one of **three timed challenges** at a time:
 
-- **Metropolitan Growth:** add 5,000 residents within 60 months.
-- **Green Capital:** reach 10,000 residents with pollution below 10 within 120 months.
-- **Golden Treasury:** increase city funds by €150,000 within 60 months. Taking a new loan ends the attempt.
+- **Metropolitan Growth:** add 5,000 residents within 5 simulation minutes.
+- **Green Capital:** reach 10,000 residents with pollution below 10 within 10 simulation minutes.
+- **Golden Treasury:** increase city funds by €150,000 within 5 simulation minutes. Taking a new loan ends the attempt.
 
 Successful challenges award money, experience, and a permanent badge. Failed attempts can be restarted.
 
-The **city goal** requires **six consecutive months** with all of the following: at least **25,000 residents**, **80 happiness**, **70 education**, **70 health**, and a **positive monthly budget**. You can keep building afterward in free play. Quests and challenges help you get there; completing every quest is not required for the city goal.
+The **city goal** requires **30 consecutive simulation seconds** with all of the following: at least **25,000 residents**, **80 happiness**, **70 education**, **70 health**, and a **positive running balance**. You can keep building afterward in free play. Quests and challenges help you get there; completing every quest is not required for the city goal.
 
 ## Camera, cars, and residents
 
@@ -116,7 +116,7 @@ The **city goal** requires **six consecutive months** with all of the following:
 | **Cmd/Ctrl + Z** | Undo the latest available construction or disaster action |
 | **Esc** | Leave the car, close a dialog, or cancel a draft; keep the construction tool |
 
-The **globe** shows the whole region; the **crosshair** returns to the city center. Click the minimap to move the view directly to a location. Find navigation help under **City menu → Camera & residents**. The **City journal** is always available from the city menu, including in narrow laptop and mobile-sized layouts.
+The **globe** shows the whole region; the **crosshair** returns to the city center. Click the minimap to move the view directly to a location. Open the city menu to slide in the **city-management sidebar**. Its persistent navigation opens your budget, reports, weather and lighting, disasters, goals, journal, and controls directly. Navigation help is under **Controls**. The **City journal** is always available from the city menu, including in narrow laptop and mobile-sized layouts.
 
 **Keyboard in menus:** Tab and Shift+Tab move between dialog controls. Focused buttons keep their normal Enter/Space behavior; game shortcuts do not take over while you operate menu controls or type in a field. Closing a dialog returns focus to the control that opened it, when available. When the same dialog updates, it retains its scroll position and focus where possible. Side panels and dialog content can scroll in smaller windows; NPC speech bubbles stay behind interface panels.
 
@@ -124,7 +124,7 @@ The **globe** shows the whole region; the **crosshair** returns to the city cent
 
 Driving allows **50 km/h on roads near buildings**, **70 km/h on open roads outside developed areas**, and **25 km/h off-road**. Your speed and the current limit appear in the driving display. Sedans, taxis, vans, and trucks have different body shapes and sizes, with round wheels, rims, mirrors, and lights.
 
-**Traffic and signals:** vehicles keep to the right-hand lane. Traffic lights appear automatically at T-junctions and crossroads; closely spaced junctions operate as one group. The visible red, yellow, and green lights follow the same controller as the AI traffic, with a brief all-red interval between approaches. AI vehicles stop at red or yellow, wait for occupied junctions, and enter only when the exit has enough space for the whole vehicle. Unsignalized conflicts use right-hand priority; tight bends and service-yard merges also admit vehicles only when the shared space is clear. Cars queue behind traffic and account for vehicle size, including trucks. Congestion can still occur on crowded or obstructed roads.
+**Traffic and signals:** vehicles keep to the right-hand lane. Traffic lights appear automatically at T-junctions and crossroads; closely spaced junctions operate as one group. The visible red, yellow, and green lights follow the same controller as the AI traffic, with a brief all-red interval between approaches. AI vehicles stop at red or yellow, wait for occupied junctions, and enter only when the exit has enough space for the whole vehicle. Unsignalized conflicts use right-hand priority; tight bends, dead-end turnarounds, and service-yard merges also admit vehicles only when the shared space is clear. Cars queue behind traffic and account for vehicle size, including trucks. A short cul-de-sac next to a junction shares its clearance area, preventing a turning vehicle from blocking the very exit it needs. Congestion can still occur on crowded or obstructed roads.
 
 **Service vehicles:** police cars, fire engines, and ambulances start in their station or hospital yard. With a usable connection, they drive along the access route and ramp, wait for a safe gap, and join the AI road traffic. You can select their steering-wheel button and drive them yourself, just like the other vehicles.
 
@@ -138,19 +138,21 @@ Cats and dogs appear occasionally in residential neighborhoods and parks. Small 
 
 A strong throw activates ragdoll physics; fatal impacts leave a blood mark on the ground or building. A fatal impact or carrying a resident beyond the map edge removes **exactly one resident** from the population. If other residents or a police station are within observation range, happiness also drops by **2 points**; without witnesses, that penalty does not apply. Observation uses a simplified distance rule. Visible residents and vehicles represent a limited sample of city life, not a full simulation of every citizen and commute.
 
-**Construction undo** retains up to **ten successful construction actions** in the current city session. It survives game months and changes to settings, taxes, budgets, or loans. Undo reverses the selected construction edit and refunds its actual cost; it does not rewind the calendar, monthly income and expenses, current settings, or unrelated city growth. Undoing a zone removes that placement even if it has since developed; undoing a utility line leaves unrelated development in place. If the affected tiles have changed incompatibly, undo is rejected rather than overwriting the newer state. Claiming a quest reward or triggering a disaster clears the construction history.
+**Construction undo** retains up to **ten successful construction actions** in the current city session. It survives economic updates and changes to settings, taxes, budgets, or loans. Undo reverses the selected construction edit and refunds its actual cost; it does not rewind elapsed play time, running income and expenses, current settings, or unrelated city growth. Undoing a zone removes that placement even if it has since developed; undoing a utility line leaves unrelated development in place. If the affected tiles have changed incompatibly, undo is rejected rather than overwriting the newer state. Claiming a quest reward or triggering a disaster clears the construction history.
 
-**Disaster undo** is separate: the most recent triggered disaster can be reversed only before the next game month or another incompatible city change. Pause before triggering a disaster if you want time to undo it. Neither undo history is stored in save files; reloading, importing a city, or starting a new city begins a fresh history.
+**Disaster undo** is separate: triggering an event automatically pauses the city so you can inspect it or press **Cmd/Ctrl+Z**. Resuming the simulation or making another incompatible city change ends that undo window. Neither undo history is stored in save files; reloading, importing a city, or starting a new city begins a fresh history.
 
 ## Weather, graphics, and disasters
 
 **Graphics & lighting** offers **Performance**, **Balanced**, and **Ultra** profiles controlling resolution, shadow detail, and antialiasing. Solid stylized houses, blue high-rises with Manhattan-inspired silhouettes, and sawtooth-roof factories define the city. Original grass and terrain materials, water, an atmospheric sky, and fog around the region complete the landscape. Rendering uses Three.js with WebGL2, soft stabilized real-time shadows, and sky reflections in materials.
 
-The automatic **day–night cycle takes about four minutes** while the city runs. The sun, moon, and shadows follow the time of day. You can disable the cycle and set a fixed time. Toggle **city lights** independently using the **light bulb at the top**, **L**, or the graphics dialog. This controls building windows and streetlights together. Powered streetlights have warm light fixtures and visible pools of light on the road at night; unpowered ones stay dark. **Rain** adds wet surfaces, puddles, and raindrops.
+The automatic **day–night cycle takes about four minutes** while the city runs. The sun, moon, and shadows follow the time of day. You can disable the cycle and set a fixed time. Toggle **city lights** independently using the **light bulb at the top**, **L**, or the graphics dialog. This controls building windows and streetlights together. **Every powered streetlight** illuminates its surroundings at night in every graphics profile; moving the camera no longer reassigns or switches off lamps. Unpowered lamps stay dark. **Dynamic weather** is enabled by default: clear spells of roughly 2½–5 simulation minutes alternate with 1–2½ minute showers. Rain wets the streets; raindrops fade and puddles dry after a shower. Choosing Clear or Rain manually pauses the automatic cycle; re-enable **Dynamic weather** to resume it. Weather phase and remaining duration survive save/reload. Ordinary rain never damages buildings or utility networks.
+
+Lane markings, crosswalks, and stop lines are part of the asphalt texture, with variants for the actual road connections and intersections. Painted and unpainted pavement share the same surface, including on sloped roads.
 
 Use **City menu → Take a photo** to export the current game view as a PNG. Large, dense regions require more memory and processing power; choose a lower graphics profile if needed. No particular frame rate is guaranteed across devices.
 
-Enable **Sandbox mode** under **City menu → Disasters** before deliberately triggering a **major fire, earthquake, flood, or severe storm**. Disasters damage buildings, roads, or utility networks. Burning sites show animated flames, a warm glow, rising smoke, and drifting embers. Low coastal land is vulnerable to flooding; fires can spread, while supplied fire stations limit them. Clear debris and repair broken utility lines to restore services.
+Enable **Sandbox mode** under **City menu → Disasters** before deliberately triggering a **major fire, earthquake, or severe storm**. Disasters damage buildings, roads, or utility networks. Burning sites show animated flames, a warm glow, rising smoke, and drifting embers. Floods have been removed. Fires can spread, while supplied fire stations limit them. Removing the flood tool does not automatically rebuild existing disaster damage. Clear debris and repair broken utility lines to restore services.
 
 ## Saves and assets
 

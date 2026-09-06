@@ -250,11 +250,11 @@ test('treasury challenge catches new loans even when repaid and supports legitim
   assert.equal(state.money,before+CHALLENGES.find(challenge=>challenge.id==='treasury-builder')!.rewardMoney);
 });
 
-test('campaign victory needs six consecutive months with all city targets simultaneously, then freeplay persists',()=>{
+test('campaign victory needs thirty simulation seconds with all city targets simultaneously, then freeplay persists',()=>{
   const state=fixture(25000);
   for(let i=0;i<5;i++) nextMonth(state);
   assert.equal(state.progression.victory,false);
-  assert.equal(getCampaignProgress(state).requirements.at(-1)?.current,5);
+  assert.equal(getCampaignProgress(state).requirements.at(-1)?.current,25);
   state.stats.health=69;
   nextMonth(state);
   assert.equal(getCampaignProgress(state).requirements.at(-1)?.current,0);
@@ -390,7 +390,7 @@ test('English challenge lifecycle retains bilingual journal text when saved and 
   const state=fixture(2000);
   setLocale('en');
   assert.equal(startChallenge(state,'missing').message,'This challenge does not exist.');
-  assert.match(startChallenge(state,'growth-spurt').message,/Metropolitan Growth started.*60 months/);
+  assert.match(startChallenge(state,'growth-spurt').message,/Metropolitan Growth started.*5 simulation minutes/);
   assert.equal(startChallenge(state,'green-capital').message,'Finish your current challenge first.');
   assert.equal(getChallengeProgress(state)?.label,'0 / 5,000 new residents');
   state.stats.population=7000;
@@ -419,13 +419,13 @@ test('English stage and campaign achievements preserve canonical German events a
   const rankEvent=state.events.find(event=>event.title.startsWith('Ausbaustufe erreicht:'))!;
   assert.equal(localizedEventTitle(rankEvent),'Development stage reached: Metropolis');
   assert.match(localizedEventMessage(rankEvent),/^15,000 residents reached/);
-  assert.deepEqual(getCampaignProgress(state).requirements.map(item=>item.label),['Residents','Happiness','Education','Health','Months meeting all targets with a positive budget']);
+  assert.deepEqual(getCampaignProgress(state).requirements.map(item=>item.label),['Residents','Happiness','Education','Health','Seconds meeting all targets with a positive balance']);
   for (let month=0;month<5;month++) nextMonth(state);
   const victory=state.events.find(event=>event.title.startsWith('Stadtziel erreicht'))!;
   assert.match(localizedEventMessage(victory),/Teststadt has maintained at least 25,000 residents/);
   assert.equal(getCampaignProgress(state).label,'City goal completed · Free play');
   setLocale('de');
   assert.equal(getCampaignProgress(state).label,'Stadtziel gemeistert · Freies Spiel');
-  assert.match(localizedEventMessage(victory),/^Teststadt hat sechs Monate lang mindestens 25\.000 Einwohner/);
+  assert.match(localizedEventMessage(victory),/^Teststadt hat 30 Spielsekunden lang mindestens 25\.000 Einwohner/);
   assert.equal(state.progression.victory,true);
 });

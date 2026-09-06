@@ -22,9 +22,11 @@ export function buildRoadNetwork(state:Pick<CityState,'tiles'>):RoadNetwork {
   const neighbors=new Map<string,Point[]>();
   for(const [key,p] of roads)neighbors.set(key,steps.map(d=>({x:p.x+d.x,z:p.z+d.z})).filter(n=>roads.has(roadPointKey(n))));
   const signalCells=new Set([...neighbors].filter(([,ns])=>ns.length>=3).map(([key])=>key));
-  // Tight bends need exclusive truck clearance, without traffic lights.
+  // Tight bends and dead-end U-turns need exclusive vehicle clearance without
+  // traffic lights. A car turning in a one-tile cul-de-sac sweeps back into the
+  // junction behind it; treating that tile as queue storage deadlocks both cars.
   const serviceTiles=new Set(state.tiles.filter(t=>['fire','hospital','police'].includes(t.kind)).map(roadPointKey));
-  const junctionCells=new Set([...neighbors].filter(([key,ns])=>{const p=roads.get(key)!;return steps.some(d=>serviceTiles.has(roadPointKey({x:p.x+d.x,z:p.z+d.z})))||ns.length>=3||(ns.length===2&&(ns[0].x+ns[1].x!==p.x*2||ns[0].z+ns[1].z!==p.z*2));}).map(([key])=>key));
+  const junctionCells=new Set([...neighbors].filter(([key,ns])=>{const p=roads.get(key)!;return steps.some(d=>serviceTiles.has(roadPointKey({x:p.x+d.x,z:p.z+d.z})))||ns.length===1||ns.length>=3||(ns.length===2&&(ns[0].x+ns[1].x!==p.x*2||ns[0].z+ns[1].z!==p.z*2));}).map(([key])=>key));
   // Absorb a one-tile link between two crossings: it cannot safely store a truck.
   for(const [key,ns] of neighbors)if(ns.length===2&&ns.every(n=>junctionCells.has(roadPointKey(n))))junctionCells.add(key);
   const junctions:RoadJunction[]=[],junctionAt=new Map<string,RoadJunction>(),approaches=new Map<string,TrafficApproach>();

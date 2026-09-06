@@ -1,3 +1,4 @@
+import { ECONOMY_STEP_SECONDS,stepTime } from './game-time';
 import type { BuildResult, CityState, ProgressionState, Tile, Tool } from './types';
 import { eventText, formatNumber, tr } from './i18n';
 
@@ -58,22 +59,22 @@ export const QUESTS:QuestDefinition[] = [
   localized({id:'new-homes',name:'Raum zum Ankommen',description:'Weise 12 neue Wohngebietsflächen aus und erreiche mindestens 500 Einwohner.',target:12,rewardMoney:2500,rewardXp:150},"Room to Settle","Zone 12 new residential tiles and reach at least 500 residents."),
   localized({id:'shape-land',name:'Das Land gestalten',description:'Verändere das Gelände 12-mal mit Anheben, Absenken oder Einebnen.',target:12,rewardMoney:1800,rewardXp:120},"Shaping the Land","Modify the terrain 12 times by raising, lowering or leveling it."),
   localized({id:'utility-network',name:'Unter und über der Stadt',description:'Verlege 8 Rohrfelder und baue 8 Stromleitungsfelder.',target:16,rewardMoney:2500,rewardXp:150},"Below and Above the City","Lay 8 pipe tiles and build 8 power line tiles."),
-  localized({id:'reliable-services',name:'Eine verlässliche Stadt',description:'Verlege eigene Rohre und Stromleitungen. Versorge danach mindestens 95 % der bewohnten Wohnflächen 3 Monate in Folge mit Straße, Strom und Wasser.',target:3,rewardMoney:4000,rewardXp:250},"A Reliable City","Lay your own pipes and power lines. Then provide roads, electricity and water to at least 95% of occupied residential tiles for 3 consecutive months."),
+  localized({id:'reliable-services',name:'Eine verlässliche Stadt',description:'Verlege eigene Rohre und Stromleitungen. Versorge danach mindestens 95 % der bewohnten Wohnflächen 15 Spielsekunden in Folge mit Straße, Strom und Wasser.',target:3,rewardMoney:4000,rewardXp:250},"A Reliable City","Lay your own pipes and power lines. Then provide roads, electricity and water to at least 95% of occupied residential tiles for 15 consecutive simulation seconds."),
   localized({id:'local-jobs',name:'Arbeit vor Ort',description:'Weise 12 neue Gewerbe- oder Industrieflächen aus. Versorge mindestens 500 Einwohner mit wenigstens einem Arbeitsplatz je 2 Einwohner.',target:12,rewardMoney:3500,rewardXp:200},"Local Jobs","Zone 12 new commercial or industrial tiles. Reach at least 500 residents and provide at least one job per 2 residents."),
   localized({id:'urban-nature',name:'Eine Stadt atmet auf',description:'Baue 15 Parks und pflanze 25 Bäume.',target:40,rewardMoney:4000,rewardXp:250},"A City Breathes Again","Build 15 parks and plant 25 trees."),
   localized({id:'healthy-city',name:'Gut versorgt',description:'Baue ein eigenes Krankenhaus. Erreiche mit mindestens 1.500 Einwohnern einen Gesundheitswert von 70.',target:1,rewardMoney:5000,rewardXp:300},"In Good Hands","Build your own hospital. Reach at least 1,500 residents and a health score of 70."),
-  localized({id:'balanced-books',name:'Solide Finanzen',description:'Entwickle deine Stadt weiter und erwirtschafte 6 Monate in Folge einen positiven monatlichen Haushalt.',target:6,rewardMoney:6000,rewardXp:350},"Sound Finances","Develop your city and achieve a positive monthly budget for 6 consecutive months."),
+  localized({id:'balanced-books',name:'Solide Finanzen',description:'Entwickle deine Stadt weiter und erwirtschafte 30 Spielsekunden lang eine positive laufende Bilanz.',target:6,rewardMoney:6000,rewardXp:350},"Sound Finances","Develop your city and achieve a positive running balance for 30 simulation seconds."),
   localized({id:'knowledge-city',name:'Stadt des Wissens',description:'Baue eine betriebsbereite Universität. Erreiche 15.000 Einwohner und einen Bildungswert von 70.',target:1,rewardMoney:8000,rewardXp:450},"City of Knowledge","Build an operational university. Reach 15,000 residents and an education score of 70."),
   localized({id:'coastal-trade',name:'Tor zum Meer',description:'Baue einen Hafen am Wasser und schließe ihn an Straße, Strom und Wasser an.',target:1,rewardMoney:7000,rewardXp:400},"Gateway to the Sea","Build a seaport by the water and connect it to roads, electricity and water."),
   localized({id:'clean-energy',name:'Saubere Zukunft',description:'Baue Wind- oder Solarenergie. Versorge 5.000 Einwohner ohne ein aktives fossiles Kraftwerk und ohne Stromdefizit.',target:1,rewardMoney:10000,rewardXp:500},"A Clean Future","Build wind or solar power. Supply 5,000 residents without an active fossil fuel power plant or an electricity deficit."),
   localized({id:'international-city',name:'Bereit zum Abheben',description:'Baue einen betriebsbereiten Flughafen für deine Metropole mit mindestens 15.000 Einwohnern.',target:1,rewardMoney:12000,rewardXp:600},"Ready for Takeoff","Build an operational airport for your metropolis of at least 15,000 residents."),
-  localized({id:'city-of-tomorrow',name:'Die Stadt von morgen',description:'Erfülle das Stadtziel: 25.000 Einwohner, Zufriedenheit 80, Bildung und Gesundheit 70 und 6 gemeinsame Monate mit positivem Haushalt.',target:1,rewardMoney:25000,rewardXp:1500},"The City of Tomorrow","Achieve the city goal: 25,000 residents, happiness of 80, education and health of 70, and 6 consecutive months meeting all targets with a positive budget."),
+  localized({id:'city-of-tomorrow',name:'Die Stadt von morgen',description:'Erfülle das Stadtziel: 25.000 Einwohner, Zufriedenheit 80, Bildung und Gesundheit 70 und 30 gemeinsame Spielsekunden mit positiver Bilanz.',target:1,rewardMoney:25000,rewardXp:1500},"The City of Tomorrow","Achieve the city goal: 25,000 residents, happiness of 80, education and health of 70, and 30 consecutive simulation seconds meeting all targets with a positive balance."),
 ];
 
 export const CHALLENGES:ChallengeDefinition[] = [
-  localized({id:'growth-spurt',name:'Aufbruch in die Metropole',description:'Gewinne innerhalb von 60 Monaten 5.000 zusätzliche Einwohner gegenüber dem Start dieser Challenge.',target:5000,durationMonths:60,rewardMoney:20000,rewardXp:1200},"Metropolitan Growth","Gain 5,000 additional residents within 60 months of starting this challenge."),
-  localized({id:'green-capital',name:'Grüne Hauptstadt',description:'Erreiche innerhalb von 120 Monaten 10.000 Einwohner bei einer Umweltbelastung unter 10.',target:10000,durationMonths:120,rewardMoney:25000,rewardXp:1500},"Green Capital","Reach 10,000 residents with pollution below 10 within 120 months."),
-  localized({id:'treasury-builder',name:'Goldene Stadtkasse',description:'Steigere die Stadtkasse innerhalb von 60 Monaten um 150.000. Jeder neue Kredit beendet diese Challenge.',target:150000,durationMonths:60,rewardMoney:15000,rewardXp:1000},"Golden Treasury","Increase the treasury by 150,000 within 60 months. Taking any new loan ends this challenge."),
+  localized({id:'growth-spurt',name:'Aufbruch in die Metropole',description:'Gewinne innerhalb von 5 Spielminuten 5.000 zusätzliche Einwohner gegenüber dem Start dieser Challenge.',target:5000,durationMonths:60,rewardMoney:20000,rewardXp:1200},"Metropolitan Growth","Gain 5,000 additional residents within 5 simulation minutes of starting this challenge."),
+  localized({id:'green-capital',name:'Grüne Hauptstadt',description:'Erreiche innerhalb von 10 Spielminuten 10.000 Einwohner bei einer Umweltbelastung unter 10.',target:10000,durationMonths:120,rewardMoney:25000,rewardXp:1500},"Green Capital","Reach 10,000 residents with pollution below 10 within 10 simulation minutes."),
+  localized({id:'treasury-builder',name:'Goldene Stadtkasse',description:'Steigere die Stadtkasse innerhalb von 5 Spielminuten um 150.000. Jeder neue Kredit beendet diese Challenge.',target:150000,durationMonths:60,rewardMoney:15000,rewardXp:1000},"Golden Treasury","Increase the treasury by 150,000 within 5 simulation minutes. Taking any new loan ends this challenge."),
 ];
 
 const finite = (n:number|undefined) => Number.isFinite(n) ? Math.max(0,n!) : 0;
@@ -171,8 +172,8 @@ export function getQuestProgress(state:CityState,id:string):QuestProgress {
   let label = `${format(current)} / ${format(quest.target)}`;
   if (id==='utility-network') label=`${tr('Rohre','Pipes')} ${format(Math.min(8,built(state,'pipe')))}/8 · ${tr('Stromleitungen','Power lines')} ${format(Math.min(8,built(state,'powerline')))}/8`;
   if (id==='urban-nature') label=`Parks ${format(Math.min(15,built(state,'park')))}/15 · ${tr('Bäume','Trees')} ${format(Math.min(25,built(state,'tree')))}/25`;
-  if (id==='reliable-services') label=`${format(current)}/3 ${tr('Monate · Versorgung','months · Service coverage')} ${format(serviceCoverage(state))} %`;
-  if (id==='balanced-books') label=`${format(current)}/6 ${tr('positive Monate','profitable months')}`;
+  if (id==='reliable-services') label=`${format(current*ECONOMY_STEP_SECONDS)}/15 ${tr('Sekunden · Versorgung','seconds · Service coverage')} ${format(serviceCoverage(state))} %`;
+  if (id==='balanced-books') label=`${format(current*ECONOMY_STEP_SECONDS)}/30 ${tr('Sekunden im Plus','profitable seconds')}`;
   if (id==='new-homes') label=`${tr('Wohnflächen','Residential tiles')} ${format(Math.min(12,built(state,'residential')))}/12 · ${tr('Einwohner','Residents')} ${format(state.stats.population)}/500`;
   if (id==='local-jobs') label=`${tr('Arbeitsflächen','Job tiles')} ${format(Math.min(12,built(state,'commercial')+built(state,'industrial')))}/12 · Jobs ${format(state.stats.jobs)}/${format(Math.ceil(state.stats.population*.5))}`;
   return {current,target:quest.target,complete,label};
@@ -208,8 +209,8 @@ export function startChallenge(state:CityState,id:string):BuildResult {
   state.progression.activeChallenge={id,startedMonth:state.month,status:'active'};
   Object.assign(state.progression.counters,{challengePopulation:state.stats.population,challengeMoney:state.money,challengeLoan:state.loan,challengeLoansTaken:counter(state,'loansTaken')});
   state.revision++;
-  const messageDe=`${challenge.nameDe} gestartet. Du hast ${formatDe(challenge.durationMonths)} Monate. ${challenge.descriptionDe}`;
-  const messageEn=`${challenge.nameEn} started. You have ${formatEn(challenge.durationMonths)} months. ${challenge.descriptionEn}`;
+  const messageDe=`${challenge.nameDe} gestartet. Du hast ${stepTime(challenge.durationMonths)} Spielzeit. ${challenge.descriptionDe}`;
+  const messageEn=`${challenge.nameEn} started. You have ${stepTime(challenge.durationMonths)} simulation time. ${challenge.descriptionEn}`;
   addEvent(state,'Challenge gestartet','Challenge started',messageDe,messageEn,'info');
   return {ok:true,message:tr(messageDe,messageEn),cost:0,count:1};
 }
@@ -283,7 +284,7 @@ export function updateProgression(state:CityState,options:{monthly?:boolean}={})
   }
   if (!progression.victory&&counter(state,'sustainableMonths')>=6&&sustainable(state)) {
     progression.victory=true;
-    addEvent(state,'Stadtziel erreicht — deine Zukunftsstadt!','City goal achieved — your city of tomorrow!',`${state.name} hat sechs Monate lang mindestens 25.000 Einwohner, hohe Lebensqualität und einen positiven Haushalt gehalten. Du hast die Kampagne gemeistert. Baue im freien Spiel weiter!`,`${state.name} has maintained at least 25,000 residents, a high quality of life and a positive budget for six months. You have completed the campaign. Keep building in free play!`);
+    addEvent(state,'Stadtziel erreicht — deine Zukunftsstadt!','City goal achieved — your city of tomorrow!',`${state.name} hat 30 Spielsekunden lang mindestens 25.000 Einwohner, hohe Lebensqualität und einen positiven Haushalt gehalten. Du hast die Kampagne gemeistert. Baue im freien Spiel weiter!`,`${state.name} has maintained at least 25,000 residents, a high quality of life and a positive budget for 30 simulation seconds. You have completed the campaign. Keep building in free play!`);
   }
   for (const quest of QUESTS) {
     if (progression.completedQuests.includes(quest.id)||questValue(state,quest.id)<quest.target) continue;
@@ -300,7 +301,7 @@ export function getCampaignProgress(state:CityState):{current:number;target:numb
     requirement(tr('Zufriedenheit','Happiness'),state.stats.happiness,80),
     requirement(tr('Bildung','Education'),state.stats.education,70),
     requirement(tr('Gesundheit','Health'),state.stats.health,70),
-    requirement(tr('Monate mit allen Zielen und positivem Haushalt','Months meeting all targets with a positive budget'),counter(state,'sustainableMonths'),6),
+    requirement(tr('Sekunden mit allen Zielen und positiver Bilanz','Seconds meeting all targets with a positive balance'),counter(state,'sustainableMonths')*ECONOMY_STEP_SECONDS,30),
   ];
   const current=state.progression.victory?requirements.length:requirements.filter(item=>item.complete).length;
   return {current,target:requirements.length,complete:state.progression.victory,label:state.progression.victory?tr('Stadtziel gemeistert · Freies Spiel','City goal completed · Free play'):tr('Dein Ziel: eine lebenswerte Zukunftsstadt','Your goal: a city of tomorrow worth living in'),requirements};

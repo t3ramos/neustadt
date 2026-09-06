@@ -3,13 +3,14 @@ import test from 'node:test';
 import { createTrafficController, mustYieldToSide, vehicleOccupiesJunction, type TrafficVehicle } from '../src/traffic-controller.ts';
 import { buildRoadNetwork, planJunctionMovement, type JunctionMovement, type RoadNetwork, type TrafficApproach } from '../src/traffic-network.ts';
 import type { Point, Tile } from '../src/types.ts';
+import { interiorRoadNetwork } from './traffic-fixtures';
 
 function tile([x, z]: [number, number]): Tile {
   return { x, z, kind: 'road', level: 0, variation: 0, powered: false, watered: false, connected: false, pollution: 0, landValue: 0,
     traffic: 0, fire: 0, age: 0, elevation: 0, hasPipe: false, hasPowerLine: false, anchor: -1, rotation: 0 };
 }
 const cross: [number, number][] = [[0, 0], [0, -1], [0, 1], [-1, 0], [1, 0]];
-function roads(points: [number, number][] = cross): RoadNetwork { return buildRoadNetwork({ tiles: points.map(tile) }); }
+function roads(points: [number, number][] = cross): RoadNetwork { return interiorRoadNetwork(points); }
 function vehicle(id: number, values: Partial<TrafficVehicle> = {}): TrafficVehicle {
   return { id, x: -3, z: -3, yaw: 0, halfWidth: .13, halfLength: .2, ...values };
 }

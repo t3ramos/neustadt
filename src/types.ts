@@ -2,7 +2,7 @@ export type TileKind = 'empty'|'water'|'tree'|'road'|'rail'|'residential'|'comme
 export type Tool = TileKind|'inspect'|'bulldoze'|'pan'|'raise'|'lower'|'level'|'pipe'|'powerline'|'citizen';
 export type Overlay = 'none'|'power'|'water'|'landvalue'|'pollution'|'traffic'|'terrain';
 export type Weather = 'clear'|'rain';
-export type DisasterKind = 'fire'|'earthquake'|'flood'|'storm';
+export type DisasterKind = 'fire'|'earthquake'|'storm';
 export interface Tile {
   x:number; z:number; kind:TileKind; level:number; variation:number;
   powered:boolean; watered:boolean; connected:boolean; pollution:number; landValue:number; traffic:number; fire:number; age:number;
@@ -15,7 +15,7 @@ export interface ActiveChallenge { id:string; startedMonth:number; status:'activ
 export interface ProgressionState { xp:number; rank:number; completedQuests:string[]; claimedQuests:string[]; unlocked:Tool[]; counters:Record<string,number>; activeChallenge:ActiveChallenge|null; completedChallenges:string[]; victory:boolean; }
 export interface CitizenIncident { id:number; month:number; x:number; y:number; z:number; nx:number; ny:number; nz:number; witnessed:boolean; kind:'impact'|'abduction'; }
 export interface CitizenEffects { populationLoss:number; happinessPenalty:number; incidents:CitizenIncident[]; }
-export interface CityState { version:2; citizenEffects:CitizenEffects; name:string; size:number; seed:number; tiles:Tile[]; money:number; month:number; speed:0|1|2|3; tax:number; funding:{police:number;fire:number;health:number;education:number}; loan:number; stats:Stats; events:GameEvent[]; history:HistoryPoint[]; revision:number; milestone:number; progression:ProgressionState; settings:{disastersEnabled:boolean;weather:Weather;dayNightCycle:boolean;timeOfDay:number;buildingLights:boolean}; }
+export interface CityState { version:2; citizenEffects:CitizenEffects; name:string; size:number; seed:number; tiles:Tile[]; money:number; month:number; tickProgress?:number; speed:0|1|2|3; tax:number; funding:{police:number;fire:number;health:number;education:number}; loan:number; stats:Stats; events:GameEvent[]; history:HistoryPoint[]; revision:number; milestone:number; progression:ProgressionState; settings:{disastersEnabled:boolean;weather:Weather;dynamicWeather?:boolean;weatherRemaining?:number;weatherCycle?:number;dayNightCycle:boolean;timeOfDay:number;buildingLights:boolean}; }
 export interface BuildResult { ok:boolean; message:string; cost:number; count:number; }
 export interface ToolDefinition { name:string; cost:number; upkeep:number; description:string; category:'zones'|'transport'|'utilities'|'services'|'nature'|'special'|'terrain'; color:string; icon:string; footprint?:[number,number]; unlockRank?:number; }
 export type Point = {x:number;z:number};

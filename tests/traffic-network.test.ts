@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { approachKey, buildRoadNetwork, planJunctionMovement, roadPointKey, type RoadNetwork } from '../src/traffic-network.ts';
 import type { Point, Tile } from '../src/types.ts';
+import { interiorRoadNetwork } from './traffic-fixtures';
 
 function tile([x, z]: [number, number], kind: Tile['kind'] = 'road'): Tile {
   return { x, z, kind, level: 0, variation: 0, powered: false, watered: false, connected: false, pollution: 0, landValue: 0,
     traffic: 0, fire: 0, age: 0, elevation: 0, hasPipe: false, hasPowerLine: false, anchor: -1, rotation: 0 };
 }
-function roads(points: [number, number][]): RoadNetwork { return buildRoadNetwork({ tiles: points.map(p => tile(p)) }); }
+function roads(points: [number, number][]): RoadNetwork { return interiorRoadNetwork(points); }
 function crossAt(x = 0): [number, number][] { return [[x, 0], [x, -1], [x, 1], [x - 1, 0], [x + 1, 0]]; }
 function unique(points: [number, number][]): [number, number][] {
   return [...new Map(points.map(p => [p.join(','), p])).values()];
@@ -17,16 +18,17 @@ function contiguous(path: Point[]): void {
   for (let i = 1; i < path.length; i++) assert.equal(Math.abs(path[i].x - path[i - 1].x) + Math.abs(path[i].z - path[i - 1].z), 1);
 }
 
-test('straight streets and dead ends do not receive traffic lights or reservations', () => {
+test('straight interior streets do not receive traffic lights or reservations', () => {
   const network = roads([[0, 0], [1, 0], [2, 0]]);
   assert.equal(network.junctions.length, 0); assert.equal(network.approaches.size, 0);
 });
 
 test('a sharp bend receives unlit collision protection and ignores adjacent non-road tiles', () => {
-  const network = buildRoadNetwork({ tiles: [[0, 0], [0, 1], [1, 1], [2, 1]].map(p => tile(p as [number, number]))
+  const network = buildRoadNetwork({ tiles: [[0,-2],[0,-1],[0, 0], [0, 1], [1, 1], [2, 1],[3,1],[4,1]].map(p => tile(p as [number, number]))
     .concat([tile([1, 0], 'rail'), tile([-1, 1], 'residential')]) });
-  assert.equal(network.roads.size, 4); assert.equal(network.junctions.length, 1);
-  assert.equal(network.junctions[0].signalized, false); assert.equal(network.approaches.size, 2);
+  assert.equal(network.roads.size, 8);
+  assert.equal(network.junctionAt.get('0,1')?.signalized, false);
+  assert.equal(network.junctionAt.get('0,1')?.approaches.length, 2);
   assert.deepEqual(network.neighbors.get('0,1'), [{ x: 0, z: 0 }, { x: 1, z: 1 }]);
 });
 
@@ -106,10 +108,21 @@ test('ordinary roads and removed entrances cannot produce stale junction movemen
 });
 
 test('an emergency-service frontage receives unlit merge protection and disappears with the facility',()=>{
-  const state={tiles:[[0,0],[1,0],[2,0],[3,0],[4,0]].map(p=>tile(p as [number,number]))};
-  state.tiles.push(tile([2,1],'fire'));const network=buildRoadNetwork(state);
-  assert.equal(network.junctionAt.get('2,0')?.signalized,false);
-  state.tiles.pop();assert.equal(buildRoadNetwork(state).junctions.length,0);
+  const state={tiles:Array.from({length:9},(_,x)=>tile([x,0]))};
+  state.tiles.push(tile([4,1],'fire'));const network=buildRoadNetwork(state);
+  assert.equal(network.junctionAt.get('4,0')?.signalized,false);
+  state.tiles.pop();assert.equal(buildRoadNetwork(state).junctionAt.has('4,0'),false);
+});
+
+test('a dead-end U-turn is protected and adjacent short termini share the crossing clearance',()=>{
+  const points:[number,number][]=[];
+  for(let x=1;x<=7;x++)points.push([x,4]);
+  for(let z=3;z<=7;z++)if(z!==4)points.push([4,z]);
+  const network=buildRoadNetwork({tiles:points.map(p=>tile(p))});
+  assert.equal(network.junctionAt.get('4,3'),network.junctionAt.get('4,4'));
+  assert.equal(network.junctionAt.get('4,3')?.signalized,true);
+  assert.equal(network.junctionAt.get('1,4')?.signalized,false);
+  assert.notEqual(network.junctionAt.get('1,4'),network.junctionAt.get('4,4'));
 });
 
 test('driveway turns pre-plan contiguous cluster routes through a real exit before admission',()=>{

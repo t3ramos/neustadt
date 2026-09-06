@@ -40,13 +40,13 @@ Ein vorhandener Spielstand öffnet automatisch und pausiert. Beim ersten Besuch 
 2. **Strom und Wasser verlegen.** Straßen, Stromnetz und Wasserrohre sind eigenständige Netze. Verbinde das Kraftwerk mit Stromleitungen und das Wasserwerk mit Rohren. **Ein Stromanschluss pro zusammenhängendem Block reicht:** Kantenweise verbundene Wohn-, Gewerbe- und Industriegebiete leiten den Strom untereinander weiter, auch bevor dort ein Haus steht. Normale Zonenhäuser benötigen keine einzelnen Freileitungen oder Hausanschlüsse; das gilt auch für ihre Hochhäuser. Straßen und freie Zwischenflächen trennen die Blöcke, solange keine ausdrücklich verlegte Leitung sie verbindet. Nur große Anlagen mit mehrteiliger Baufläche können einen sichtbaren eigenen Anschluss erhalten. Dieser verläuft zur Grundstücksgrenze auf derselben Straßenseite und darf weder die Fahrbahn noch ein fremdes Gebäude kreuzen. Wasserrohre versorgen Grundstücke bis zwei Felder Abstand; das Wasserwerk braucht selbst Strom. Ausdrücklich verlegte Leitungen dürfen unter Straßen und Gebäuden verlaufen, im Freiland sind Strommasten sichtbar. Die Datenansichten **Strom** und **Wasser** helfen beim Prüfen.
 3. **Gebiete ausweisen.** Ziehe Wohn-, Gewerbe- oder Industriezonen von einer Ecke zur gegenüberliegenden Ecke als Rechteck auf. Beide Eckfelder zählen mit; du kannst in jede Richtung ziehen. Bewegst du die Maus vor dem Loslassen zum Startpunkt zurück, werden Fläche und Kosten wieder kleiner. Wohnen schafft Einwohner, Gewerbe und Industrie schaffen Arbeitsplätze. Bei Nachfrage, Versorgung und ausreichender Zufriedenheit wachsen Gebäude selbstständig. Fehlende Versorgung kann zum Rückbau führen. Wohnhäuser, Mehrfamilienhäuser, Geschäfte, Hochhäuser und Fabriken machen den Ausbau sichtbar.
 4. **Lebensqualität sichern.** Parks, Polizei, Feuerwehr, Kliniken und Bildungseinrichtungen wirken in ihrer Umgebung. Industrie und fossile Kraftwerke belasten Nachbargrundstücke. Stadtdienste benötigen Straße, Strom und Wasser; ihre Budgets bestimmen die Wirkung.
-5. **Den Haushalt ausgleichen.** Steuern beeinflussen Einnahmen und Zufriedenheit. Polizeiwesen, Feuerwehr, Gesundheit und Bildung haben eigene Budgets. Kredite und Rückzahlungen erfolgen in Schritten von 10.000 €, bis maximal 50.000 € Kredit; der Monatszins beträgt 0,5 %.
+5. **Den Haushalt ausgleichen.** Steuern beeinflussen Einnahmen und Zufriedenheit. Polizeiwesen, Feuerwehr, Gesundheit und Bildung haben eigene Budgets. Kredite und Rückzahlungen erfolgen in Schritten von 10.000 €, bis maximal 50.000 € Kredit. Zinsen sind in der laufenden Bilanz enthalten.
 
 Die Startversorgung liefert **6.000 Stromeinheiten je Kraftwerk** und **6.000 Wassereinheiten je versorgtem Wasserwerk**. Später liefern Windparks 1.200 und Solarparks 3.200 Stromeinheiten. Achte sowohl auf die Kapazität als auch auf durchgehende Verbindungen: Ein getrenntes Netz wird nicht durch ein Kraftwerk am anderen Ende der Karte versorgt.
 
 **Vor dem Bauen prüfen:** Die schwebende Vorschau zeigt Fläche, Abmessungen, Kosten und Bauhindernisse und bleibt im sichtbaren Fenster. Lass über der Spielwelt los, um zu bauen. **Rechtsklick oder Esc** verwirft einen laufenden Entwurf und lässt dasselbe Werkzeug ausgewählt; mit **V** oder **Auswählen** wechselst du gezielt zur Grundstücksauswahl. Loslassen über einem Menü oder Bedienfeld, außerhalb der bebaubaren Welt oder nach einer unterbrochenen Zeigerinteraktion verwirft den Entwurf. Auch das Öffnen eines Dialogs bricht einen laufenden Entwurf ab.
 
-Bei **1×** dauert ein Spielmonat etwa fünf Sekunden. **2×**, **3×** und Pause stehen in der unteren Leiste bereit. Dialoge und ein ausgeblendeter Browser-Tab pausieren die Simulation.
+Die untere Leiste zeigt **vergangene Spielzeit** statt eines schnell durchlaufenden Kalenders. Einnahmen, Kosten und Bilanz werden **pro Spielminute** angezeigt. Bei **1×** zählt jede Sekunde, **2×** und **3×** beschleunigen die Simulation. Der unabhängige Tag-Nacht-Wechsel steuert die Atmosphäre. Das bisherige Wirtschafts- und Wachstumstempo bleibt erhalten. Dialoge und ein ausgeblendeter Browser-Tab pausieren die Wirtschaftssimulation.
 
 ### Gelände und große Gebäude
 
@@ -56,18 +56,18 @@ Unter **Gelände** kannst du freie Flächen in **5-Meter-Schritten anheben oder 
 
 **Zufahrten und Höfe:** Alle 13 großen Anlagentypen unterstützen befestigte Zufahrten von einer angrenzenden Straße, auch bei gedrehten Gebäuden. Bei geeigneter Lage führt eine durchgehende Fahrspur mit Rampe auf den Vorplatz oder Parkplatz; sichtbarer Belag und Fahrzeugräder nutzen dieselbe Oberfläche. Straßen können vorne, seitlich oder hinten anschließen. Die Route bleibt auf dem vorhandenen Grundstück und verschiebt weder gespeicherte Gebäude noch Nachbarfelder. Lege die Straße direkt an die Grundstücksgrenze und achte auf einen überwindbaren Höhenunterschied. Industriegebäude erhalten einen kleineren Ladevorplatz; ist die Straße für eine nutzbare Rampe zu steil, gilt die Einfahrt nicht als befahrbar.
 
-| Anlage | Baufläche | Baukosten | Betrieb / Monat |
+| Anlage | Baufläche | Baukosten | Betrieb / Spielminute |
 | --- | ---: | ---: | ---: |
-| Kraftwerk | 4 × 4 | 6.500 € | 320 € |
-| Wasserwerk | 2 × 2 | 2.200 € | 180 € |
-| Polizeiwache | 2 × 2 | 1.900 € | 125 € |
-| Feuerwache | 3 × 2 | 1.600 € | 95 € |
-| Klinik | 3 × 3 | 3.200 € | 150 € |
-| Schule | 3 × 2 | 1.800 € | 100 € |
-| Stadion | 6 × 5 | 9.000 € | 180 € |
-| Hafen | 5 × 3 | 9.500 € | 160 € |
-| Universität | 5 × 4 | 12.000 € | 280 € |
-| Flughafen | 10 × 6 | 16.000 € | 290 € |
+| Kraftwerk | 4 × 4 | 6.500 € | 3.840 € |
+| Wasserwerk | 2 × 2 | 2.200 € | 2.160 € |
+| Polizeiwache | 2 × 2 | 1.900 € | 1.500 € |
+| Feuerwache | 3 × 2 | 1.600 € | 1.140 € |
+| Klinik | 3 × 3 | 3.200 € | 1.800 € |
+| Schule | 3 × 2 | 1.800 € | 1.200 € |
+| Stadion | 6 × 5 | 9.000 € | 2.160 € |
+| Hafen | 5 × 3 | 9.500 € | 1.920 € |
+| Universität | 5 × 4 | 12.000 € | 3.360 € |
+| Flughafen | 10 × 6 | 16.000 € | 3.480 € |
 
 Die Preise gelten **pro Anlage**, die Betriebskosten der Stadtdienste bei 100 % Budget. Beim Hafen müssen mindestens **zwei Felder entlang seiner Kaimauer direkt ans Wasser grenzen**; mit R richtet sich die Wasserseite aus. Stadion, Flughafen und Hafen besitzen eigene Details und Animationen.
 
@@ -87,13 +87,13 @@ Eine Straße kostet 18 € pro Feld, ein Wasserrohr 8 € und eine Stromleitung 
 
 Zusätzlich kannst du jeweils eine von **drei zeitlich begrenzten Challenges** starten:
 
-- **Aufbruch in die Metropole:** 5.000 zusätzliche Einwohner innerhalb von 60 Monaten.
-- **Grüne Hauptstadt:** innerhalb von 120 Monaten 10.000 Einwohner bei einer Umweltbelastung unter 10 erreichen.
-- **Goldene Stadtkasse:** innerhalb von 60 Monaten die Stadtkasse um 150.000 € steigern. Ein neuer Kredit beendet den Versuch.
+- **Aufbruch in die Metropole:** 5.000 zusätzliche Einwohner innerhalb von 5 Spielminuten.
+- **Grüne Hauptstadt:** innerhalb von 10 Spielminuten 10.000 Einwohner bei einer Umweltbelastung unter 10 erreichen.
+- **Goldene Stadtkasse:** innerhalb von 5 Spielminuten die Stadtkasse um 150.000 € steigern. Ein neuer Kredit beendet den Versuch.
 
 Erfolgreiche Challenges bringen Geld, Erfahrung und ein bleibendes Abzeichen. Fehlgeschlagene Versuche können neu gestartet werden.
 
-Das **Stadtziel** ist erreicht, wenn du **sechs Monate in Folge gleichzeitig** mindestens **25.000 Einwohner**, **80 Zufriedenheit**, **70 Bildung**, **70 Gesundheit** und einen **positiven monatlichen Haushalt** hältst. Anschließend kannst du im freien Spiel weiterbauen. Aufträge und Challenges unterstützen den Weg; das Ziel verlangt nicht, dass vorher jeder Auftrag abgeschlossen wurde.
+Das **Stadtziel** ist erreicht, wenn du **30 Spielsekunden in Folge gleichzeitig** mindestens **25.000 Einwohner**, **80 Zufriedenheit**, **70 Bildung**, **70 Gesundheit** und eine **positive laufende Bilanz** hältst. Anschließend kannst du im freien Spiel weiterbauen. Aufträge und Challenges unterstützen den Weg; das Ziel verlangt nicht, dass vorher jeder Auftrag abgeschlossen wurde.
 
 ## Kamera, Autos und Bewohner
 
@@ -116,7 +116,7 @@ Das **Stadtziel** ist erreicht, wenn du **sechs Monate in Folge gleichzeitig** m
 | **Cmd/Ctrl + Z** | Letzte verfügbare Bau- oder Katastrophenaktion rückgängig machen |
 | **Esc** | Fahrt beenden, Dialog schließen oder Entwurf abbrechen; Bauwerkzeug behalten |
 
-Die **Weltkugel** zeigt die ganze Region, das **Fadenkreuz** bringt dich zur Innenstadt. Ein Klick auf die Minikarte verschiebt den Blick direkt an einen Ort. Unter **Stadtmenü → Kamera & Bewohner** findest du die Navigationshilfe. Das **Stadtjournal** erreichst du immer über das Stadtmenü, auch in schmalen Laptop- und Mobilansichten.
+Die **Weltkugel** zeigt die ganze Region, das **Fadenkreuz** bringt dich zur Innenstadt. Ein Klick auf die Minikarte verschiebt den Blick direkt an einen Ort. Das Stadtmenü schiebt die **Seitenleiste zur Stadtverwaltung** ins Bild. Ihre dauerhaft sichtbare Navigation öffnet Haushalt, Berichte, Wetter und Licht, Katastrophen, Stadtziele, Journal und Steuerung direkt. Die Navigationshilfe steht unter **Steuerung**. Das **Stadtjournal** erreichst du immer über das Stadtmenü, auch in schmalen Laptop- und Mobilansichten.
 
 **Tastatur in Menüs:** Mit Tab und Umschalt+Tab wechselst du zwischen Dialogfeldern. Fokussierte Schaltflächen behalten ihre normale Enter-/Leertastenfunktion; Spielkürzel greifen nicht ein, während du Menüelemente bedienst oder Text eingibst. Nach dem Schließen erhält das öffnende Bedienelement nach Möglichkeit den Fokus zurück. Beim Aktualisieren desselben Dialogs bleiben Scrollposition und Fokus soweit möglich erhalten. Seitenleisten und Dialoginhalte lassen sich in kleineren Fenstern scrollen; NPC-Sprechblasen liegen hinter den Bedienfeldern.
 
@@ -124,7 +124,7 @@ Die **Weltkugel** zeigt die ganze Region, das **Fadenkreuz** bringt dich zur Inn
 
 Das Fahrprofil erlaubt **50 km/h auf Straßen in Bebauungsnähe**, **70 km/h auf freien Straßen außerhalb der Bebauung** und **25 km/h abseits der Straße**. Das aktuelle Tempo und die jeweilige Grenze erscheinen in der Fahranzeige. Limousinen, Taxis, Transporter und Lastwagen besitzen unterschiedliche Karosserien und Größen sowie runde Räder, Felgen, Spiegel und Leuchten.
 
-**Verkehr und Ampeln:** Fahrzeuge fahren auf der rechten Fahrbahnseite. An T-Einmündungen und Kreuzungen entstehen automatisch Ampeln; eng benachbarte Kreuzungen werden gemeinsam geregelt. Die sichtbaren roten, gelben und grünen Lichter folgen derselben Steuerung wie der KI-Verkehr, mit einer kurzen Rundum-Rotphase zwischen den Zufahrten. KI-Fahrzeuge halten bei Rot oder Gelb, warten vor belegten Kreuzungen und fahren erst hinein, wenn dahinter genügend Platz für das gesamte Fahrzeug frei ist. Bei unbeschilderten Konflikten gilt rechts vor links; enge Kurven und Einmündungen von Betriebshöfen lassen Fahrzeuge ebenfalls nur bei freier gemeinsamer Fahrfläche passieren. Autos stellen sich hinter wartendem Verkehr an und berücksichtigen Fahrzeuggrößen einschließlich LKWs. Auf stark belegten oder blockierten Straßen können weiterhin Staus entstehen.
+**Verkehr und Ampeln:** Fahrzeuge fahren auf der rechten Fahrbahnseite. An T-Einmündungen und Kreuzungen entstehen automatisch Ampeln; eng benachbarte Kreuzungen werden gemeinsam geregelt. Die sichtbaren roten, gelben und grünen Lichter folgen derselben Steuerung wie der KI-Verkehr, mit einer kurzen Rundum-Rotphase zwischen den Zufahrten. KI-Fahrzeuge halten bei Rot oder Gelb, warten vor belegten Kreuzungen und fahren erst hinein, wenn dahinter genügend Platz für das gesamte Fahrzeug frei ist. Bei unbeschilderten Konflikten gilt rechts vor links; enge Kurven, Wendeflächen in Sackgassen und Einmündungen von Betriebshöfen lassen Fahrzeuge ebenfalls nur bei freier gemeinsamer Fahrfläche passieren. Autos stellen sich hinter wartendem Verkehr an und berücksichtigen Fahrzeuggrößen einschließlich LKWs. Kurze Sackgassen teilen sich die Freigabe mit der angrenzenden Kreuzung, damit ein wendendes Fahrzeug seine eigene Ausfahrt nicht blockiert. Auf stark belegten oder blockierten Straßen können weiterhin Staus entstehen.
 
 **Dienstfahrzeuge:** Polizeiautos, Feuerwehrfahrzeuge und Krankenwagen starten im Hof ihrer Wache beziehungsweise Klinik. Bei nutzbarer Verbindung fahren sie über die Zufahrt und Rampe, warten auf eine sichere Lücke und ordnen sich in den KI-Straßenverkehr ein. Über ihren Lenkradknopf kannst du sie wie andere Fahrzeuge auswählen und selbst fahren.
 
@@ -138,19 +138,21 @@ Katzen und Hunde tauchen vereinzelt in bewohnten Vierteln und Parks auf. In geei
 
 Ein kräftiger Wurf aktiviert die Ragdoll-Physik; tödliche Aufpralle hinterlassen einen Blutfleck an Boden oder Gebäude. Ein tödlicher Aufprall oder eine Entführung über den Kartenrand reduziert die Bevölkerung um **genau einen Einwohner**. Befinden sich andere Bewohner oder eine Polizeiwache in Beobachtungsreichweite, sinkt zusätzlich die Zufriedenheit um **2 Punkte**; ohne Zeugen entfällt dieser Abzug. Die Sichtprüfung ist eine vereinfachte Reichweitenregel. Sichtbare Bewohner und Fahrzeuge bilden eine begrenzte Auswahl des Stadtlebens ab, keine vollständige Simulation jedes Einwohners und Arbeitswegs.
 
-**Bauten rückgängig machen:** Bis zu **zehn erfolgreiche Bauaktionen** bleiben in der laufenden Stadtsitzung verfügbar, auch über Spielmonate und Änderungen an Einstellungen, Steuern, Budgets oder Krediten hinweg. Rückgängig entfernt die jeweilige Bauänderung und erstattet deren tatsächliche Kosten. Kalender, monatliche Einnahmen und Ausgaben, aktuelle Einstellungen und das übrige Stadtwachstum werden dabei nicht zurückgesetzt. Eine rückgängig gemachte Zone wird auch dann entfernt, wenn sie inzwischen bebaut wurde; beim Zurücknehmen einer Leitung bleibt die sonstige Bebauung erhalten. Wurden betroffene Felder inzwischen unvereinbar verändert, wird Rückgängig abgewiesen, statt den neueren Zustand zu überschreiben. Das Abholen einer Auftragsbelohnung oder das Auslösen einer Katastrophe leert den Bauverlauf.
+**Bauten rückgängig machen:** Bis zu **zehn erfolgreiche Bauaktionen** bleiben in der laufenden Stadtsitzung verfügbar, auch über Wirtschaftsfortschritte und Änderungen an Einstellungen, Steuern, Budgets oder Krediten hinweg. Rückgängig entfernt die jeweilige Bauänderung und erstattet deren tatsächliche Kosten. Spielzeit, laufende Einnahmen und Ausgaben, aktuelle Einstellungen und das übrige Stadtwachstum werden dabei nicht zurückgesetzt. Eine rückgängig gemachte Zone wird auch dann entfernt, wenn sie inzwischen bebaut wurde; beim Zurücknehmen einer Leitung bleibt die sonstige Bebauung erhalten. Wurden betroffene Felder inzwischen unvereinbar verändert, wird Rückgängig abgewiesen, statt den neueren Zustand zu überschreiben. Das Abholen einer Auftragsbelohnung oder das Auslösen einer Katastrophe leert den Bauverlauf.
 
-**Katastrophen rückgängig machen:** Dafür gibt es einen getrennten Verlauf. Die zuletzt ausgelöste Katastrophe lässt sich nur vor dem nächsten Spielmonat oder einer anderen unvereinbaren Stadtänderung zurücknehmen. Pausiere vor dem Auslösen, wenn du Zeit zum Rückgängigmachen haben möchtest. Beide Verläufe gelten nur für die Sitzung und werden nicht im Spielstand gespeichert; Neuladen, Import oder eine neue Stadt beginnen mit leerem Verlauf.
+**Katastrophen rückgängig machen:** Dafür gibt es einen getrennten Verlauf. Nach dem Auslösen pausiert die Stadt automatisch. So kannst du die Wirkung ansehen oder **Cmd/Strg+Z** drücken. Fortsetzen oder eine andere unvereinbare Stadtänderung beendet diese Rücknahmemöglichkeit. Beide Verläufe gelten nur für die Sitzung und werden nicht im Spielstand gespeichert; Neuladen, Import oder eine neue Stadt beginnen mit leerem Verlauf.
 
 ## Wetter, Grafik und Katastrophen
 
 Unter **Grafik & Beleuchtung** stehen **Flüssig**, **Ausgewogen** und **Sehr hoch** bereit. Die Profile regeln Auflösung, Schattendetails und Kantenglättung. Solide stilisierte Wohnhäuser, blaue Hochhäuser mit Manhattan-Silhouette und Fabriken mit Sägezahndächern prägen die Stadt. Eigene Gras- und Geländematerialien, Wasser, atmosphärischer Himmel und der Nebel am Regionsrand ergänzen die Landschaft. Die Grafik verwendet Three.js mit WebGL2, weichen stabilisierten Echtzeitschatten und Materialreflexionen des Himmels.
 
-Der automatische **Tag-Nacht-Wechsel dauert etwa vier Minuten** bei laufender Stadt. Sonne, Mond und Schatten folgen der Tageszeit. Du kannst den Zyklus abschalten und eine feste Uhrzeit wählen. Die **Stadtbeleuchtung** schaltest du unabhängig davon über die **Glühbirne oben**, mit **L** oder im Grafikfenster ein und aus. Der Schalter steuert gemeinsam Gebäudefenster und Straßenlaternen. Versorgte Laternen besitzen warme Leuchtkörper und nachts sichtbare Lichtflächen auf der Straße; ohne Strom bleiben sie dunkel. **Regen** erzeugt nasse Oberflächen, Pfützen und Regentropfen.
+Der automatische **Tag-Nacht-Wechsel dauert etwa vier Minuten** bei laufender Stadt. Sonne, Mond und Schatten folgen der Tageszeit. Du kannst den Zyklus abschalten und eine feste Uhrzeit wählen. Die **Stadtbeleuchtung** schaltest du unabhängig davon über die **Glühbirne oben**, mit **L** oder im Grafikfenster ein und aus. Der Schalter steuert gemeinsam Gebäudefenster und Straßenlaternen. **Alle versorgten Laternen** beleuchten nachts ihre Umgebung, in jedem Grafikprofil. Beim Verschieben der Kamera werden keine Laternen mehr umgeschaltet oder neu zugeordnet. Ohne Strom bleiben sie dunkel. **Dynamisches Wetter** ist standardmäßig aktiv: Klare Phasen von ungefähr 2½–5 Spielminuten wechseln mit 1–2½ Minuten langen Schauern. Regentropfen blenden danach aus, Pfützen trocknen wieder. Die manuelle Wahl von Klar oder Regen pausiert die Automatik; mit **Dynamisches Wetter** schaltest du sie wieder ein. Wetterphase und verbleibende Dauer bleiben beim Speichern und Neuladen erhalten. Normaler Regen beschädigt weder Gebäude noch Versorgungsnetze.
+
+Fahrbahnstriche, Zebrastreifen und Haltelinien sind Bestandteil der Asphalttextur. Varianten richten sich nach den tatsächlichen Straßenanschlüssen und Kreuzungen. Markierungen liegen dadurch auch auf schrägen Straßen genau in derselben Oberfläche wie der übrige Asphalt.
 
 Über **Stadtmenü → Stadt fotografieren** exportierst du die aktuelle Spielansicht als PNG. Große, dicht bebaute Regionen beanspruchen mehr Speicher und Rechenleistung; wähle bei Bedarf ein niedrigeres Grafikprofil. Eine bestimmte Bildrate wird nicht für alle Geräte zugesichert.
 
-Unter **Stadtmenü → Katastrophen** aktivierst du den **Experimentiermodus**. Erst dann lassen sich **Großbrand, Erdbeben, Hochwasser und schwerer Sturm** absichtlich auslösen. Die Ereignisse beschädigen Gebäude, Straßen oder Versorgungsnetze. An brennenden Stellen sind animierte Flammen, warmer Lichtschein, aufsteigender Rauch und treibende Glutpartikel sichtbar. Tiefe Küstenflächen sind bei Hochwasser gefährdet; Feuer kann sich ausbreiten und wird durch versorgte Feuerwachen begrenzt. Räume Trümmer und repariere unterbrochene Leitungen, um die Stadt wieder zu versorgen.
+Unter **Stadtmenü → Katastrophen** aktivierst du den **Experimentiermodus**. Erst dann lassen sich **Großbrand, Erdbeben und schwerer Sturm** absichtlich auslösen. Die Ereignisse beschädigen Gebäude, Straßen oder Versorgungsnetze. An brennenden Stellen sind animierte Flammen, warmer Lichtschein, aufsteigender Rauch und treibende Glutpartikel sichtbar. Hochwasser wurde entfernt. Feuer kann sich ausbreiten und wird durch versorgte Feuerwachen begrenzt. Bereits entstandene Katastrophenschäden werden durch das Entfernen des Hochwasserwerkzeugs nicht automatisch wieder aufgebaut. Räume Trümmer und repariere unterbrochene Leitungen, um die Stadt wieder zu versorgen.
 
 ## Spielstände und Assets
 

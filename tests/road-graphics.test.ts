@@ -83,9 +83,9 @@ test('asphalt and markings follow the exact triangle surface through a nonplanar
     const expected=sampleRoadHeight(state,x,z)+.0455;
     assert.ok(Math.abs(rayHeight(model,x,z)-expected)<.00001,`Asphalt must not float or cut through the diagonal at ${u},${v}`);
   }
-  // A crossing marking sits above the asphalt, with its original local thickness retained.
+  // Painted pixels belong to the asphalt itself, with no extra marking geometry.
   const x=tile.x+.5+.065-state.size/2,z=tile.z+.5-.36-state.size/2;
-  assert.ok(Math.abs(rayHeight(model,x,z)-(sampleRoadHeight(state,x,z)+.049))<.00001);
+  assert.ok(Math.abs(rayHeight(model,x,z)-(sampleRoadHeight(state,x,z)+.0455))<.00001);
 });
 
 test('coastal bridges keep a continuous nonnegative deck while preserving submerged terrain', t=>{

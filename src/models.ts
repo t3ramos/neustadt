@@ -1,3 +1,4 @@
+import { roadSurfaceMaterial,setRoadSurfaceWet,textureAsphalt } from './road-surface';
 import * as THREE from 'three';
 import { createDetailedCar } from './vehicle-model';
 import { tr } from './i18n';
@@ -31,6 +32,7 @@ function updateWetMaterial(material: THREE.MeshStandardMaterial, color: number):
 
 export function setModelWet(wet: boolean): void {
   modelWet = wet;
+  setRoadSurfaceWet(wet);
   for (const [color, material] of materialCache) updateWetMaterial(material, color);
   if (facilityPavingMaterial) updateWetMaterial(facilityPavingMaterial, palette.asphalt);
 }
@@ -380,26 +382,8 @@ function road(g: THREE.Group, tile: Tile, state: CityState): void {
     apron.name = 'road-facility-apron';
     apron.userData.drivingSurface = true;
   }
-  if (count <= 2) {
-    if ((north && south) || (!horizontal && !vertical) || (vertical && !horizontal)) {
-      for (let j = 0; j < 3; j++) box(g, palette.line, 0, .047, (j - 1) * .34, .022, .004, .17);
-    } else if (horizontal && !vertical) {
-      for (let j = 0; j < 3; j++) box(g, palette.line, (j - 1) * .34, .047, 0, .17, .004, .022);
-    } else {
-      if (north) box(g, palette.line, 0, .047, -.30, .022, .004, .24);
-      if (south) box(g, palette.line, 0, .047, .30, .022, .004, .24);
-      if (east) box(g, palette.line, .30, .047, 0, .24, .004, .022);
-      if (west) box(g, palette.line, -.30, .047, 0, .24, .004, .022);
-    }
-  } else {
-    for (let j = 0; j < 4; j++) {
-      const p = (j - 1.5) * .13;
-      if (north) box(g, palette.white, p, .047, -.36, .075, .004, .12);
-      if (south) box(g, palette.white, p, .047, .36, .075, .004, .12);
-      if (east) box(g, palette.white, .36, .047, p, .12, .004, .075);
-      if (west) box(g, palette.white, -.36, .047, p, .12, .004, .075);
-    }
-  }
+  const surface=roadSurfaceMaterial(state,tile);
+  for(const child of g.children)if(child instanceof THREE.Mesh&&child.material===modelMaterial(palette.asphalt))textureAsphalt(child,surface);
   if ((tile.x + tile.z) % 6 === 0) {
     cylinder(g, palette.dark, -.413, .265, .405, .025, .48);
     box(g, palette.dark, -.343, .505, .405, .16, .025, .035);

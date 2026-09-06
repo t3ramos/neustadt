@@ -54,3 +54,18 @@ test('adding roads that enlarge a junction replans a waiting car even when its o
   const changed=buildRoadNetwork({tiles});controller.rebuild(changed);prepareTrafficRoute(car,changed,controller,1);
   assert.notEqual(car.movement!.junctionId,old);assert.equal(car.movement!.junctionId,changed.approaches.get(car.movement!.approachId)!.junctionId);
 });
+
+test('two cars already turning in a short post-demolition cul-de-sac clear the adjoining intersection',()=>{
+  const tiles:Tile[]=[];
+  for(let x=1;x<=7;x++)tiles.push({x,z:4,kind:'road'} as Tile);
+  for(let z=3;z<=7;z++)if(z!==4)tiles.push({x:4,z,kind:'road'} as Tile);
+  const network=buildRoadNetwork({tiles}),controller=createTrafficController(network);
+  const routes:TrafficRouteState[]=[.0989021201,.5077829265].map((progress,i)=>({previous:{x:4,z:4},from:{x:4,z:3},to:{x:4,z:4},progress,turn:i}));
+  const occupants:TrafficVehicle[]=routes.map((r,i)=>({id:i+1,...lanePose(r.previous,r.from,r.to,r.progress),halfWidth:.1055,halfLength:.19325}));
+  for(let frame=0;frame<4800;frame++){
+    controller.update(.025,occupants);
+    for(let i=0;i<routes.length;i++)advanceTrafficRoute(routes[i],i+1,.48,.025,network,controller,occupants);
+  }
+  assert.ok(routes.every(r=>(r.travelled??0)>12),JSON.stringify(routes));
+  assert.ok(controller.getDebug().completed>8);
+});

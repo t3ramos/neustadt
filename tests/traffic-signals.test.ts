@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
 import { createCity } from '../src/simulation.ts';
+import { createTileModel } from '../src/models';
+import { ROAD_SURFACE_HEIGHT,roadPaintAt,roadStopMask } from '../src/road-surface';
+import { warpRoadModel } from '../src/road-graphics';
 import { sampleRoadHeight } from '../src/road-graphics.ts';
 import { buildRoadNetwork, type RoadJunction } from '../src/traffic-network.ts';
 import { createTrafficController, STOP_LINE_OFFSET } from '../src/traffic-controller.ts';
@@ -14,8 +17,8 @@ function city(size = 40): CityState {
   return state;
 }
 function cross(state: CityState, x = 10, z = 10) {
-  for (const [dx, dz] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) state.tiles[(z + dz) * state.size + x + dx].kind = 'road';
-  return buildRoadNetwork(state);
+  for(let d=-3;d<=3;d++){state.tiles[z*state.size+x+d].kind='road';state.tiles[(z+d)*state.size+x].kind='road';}
+  const network=buildRoadNetwork(state);network.junctions.sort((a,b)=>Number(b.signalized)-Number(a.signalized));return network;
 }
 function mesh(helper: ReturnType<typeof createTrafficSignals>, name: string): THREE.InstancedMesh {
   const object = helper.group.getObjectByName(`traffic-signal-${name}`);
@@ -70,37 +73,24 @@ test('rendered red, amber, and green always match the controller, including all-
   helper.setSignals([]); assert.deepEqual(helper.getDebug().aspects, { red: 4, yellow: 0, green: 0 }, 'Missing state must fail to red instead of retaining a stale green');
 });
 
-test('lane stop bars stay behind crosswalks and conform to the nonplanar road deck', t => {
-  const state = city(), network = cross(state);
-  for (const tile of state.tiles) if (tile.kind === 'road') tile.elevation = tile.x * .5 + tile.z * .25;
-  const helper = createTrafficSignals(state, network.junctions); t.after(() => helper.dispose());
-  const bars = mesh(helper, 'stop-bars'); helper.group.updateMatrixWorld(true);
-  const fixtures = network.junctions[0].approaches.map(approach => ({ approach, fixture: getTrafficSignalFixture(state, approach)! }));
-  assert.ok(bars.count >= 8 && bars.count <= 16, 'Each stop line is exactly split into two to four road-conforming triangles');
-  for (let instance = 0; instance < bars.count; instance++) {
-    const barMatrix = new THREE.Matrix4(); bars.getMatrixAt(instance, barMatrix);
-    assert.ok(barMatrix.determinant() > 0);
-    for (let u = 0; u <= 8; u++) for (let v = 0; v <= 8 - u; v++) {
-      const p = new THREE.Vector3(u / 8, 0, v / 8).applyMatrix4(barMatrix);
-      const { approach } = [...fixtures].sort((a, b) => Math.hypot(p.x - a.fixture.stopBar.x, p.z - a.fixture.stopBar.z) - Math.hypot(p.x - b.fixture.stopBar.x, p.z - b.fixture.stopBar.z))[0];
-      const centerX = approach.entry.x + .5 - state.size / 2, centerZ = approach.entry.z + .5 - state.size / 2;
-      const axial = (p.x - centerX) * approach.direction.x + (p.z - centerZ) * approach.direction.z;
-      const lateral = (p.x - centerX) * -approach.direction.z + (p.z - centerZ) * approach.direction.x;
-      assert.ok(axial > -STOP_LINE_OFFSET + .009 && axial < -STOP_LINE_OFFSET + .041, 'Bar sits just ahead of the truck-safe stopping bumper, wholly outside the junction');
-      assert.ok(lateral > .03 && lateral < .31, 'Bar must stay inside the inbound lane');
-      assert.ok(Math.abs(p.y - sampleRoadHeight(state, p.x, p.z) - .0525) < 1e-5);
-    }
-  }
-  for (let i = 0; i < network.junctions[0].approaches.length; i++) {
-    const approach = network.junctions[0].approaches[i], fixture = getTrafficSignalFixture(state, approach)!;
-    const centerX = approach.entry.x + .5 - state.size / 2, centerZ = approach.entry.z + .5 - state.size / 2;
-    const stopOffset = -(fixture.stopBar.x - centerX) * approach.direction.x - (fixture.stopBar.z - centerZ) * approach.direction.z;
-    assert.ok(Math.abs(stopOffset - (STOP_LINE_OFFSET - .025)) < 1e-9);
-    assert.ok(stopOffset > .5, 'Truck clearance places the bar on the external incoming road tile');
-    const hits = new THREE.Raycaster(new THREE.Vector3(fixture.stopBar.x, 30, fixture.stopBar.z), new THREE.Vector3(0, -1, 0)).intersectObject(bars);
-    assert.ok(hits.length > 0);
-    assert.ok(Math.abs(hits[0].point.y - sampleRoadHeight(state, fixture.stopBar.x, fixture.stopBar.z) - .0525) < 1e-5);
-    assert.ok(Math.abs(fixture.mast.y - sampleRoadHeight(state, fixture.mast.x, fixture.mast.z) - .045) < 1e-9);
+test('stop lines are painted on the asphalt behind crosswalks, including nonplanar decks', t => {
+  const state=city(),network=cross(state);
+  for(const tile of state.tiles)if(tile.kind==='road')tile.elevation=tile.x*.5+tile.z*.25;
+  const helper=createTrafficSignals(state,network.junctions);t.after(()=>helper.dispose());
+  assert.equal(helper.group.getObjectByName('traffic-signal-stop-bars'),undefined);
+  for(const approach of network.junctions[0].approaches){
+    const fixture=getTrafficSignalFixture(state,approach)!,tile=state.tiles[approach.from.z*state.size+approach.from.x];
+    const localX=fixture.stopBar.x-(tile.x+.5-state.size/2),localZ=fixture.stopBar.z-(tile.z+.5-state.size/2);
+    assert.equal(roadPaintAt(localX,localZ,15,roadStopMask(state,tile)),'crosswalk');
+    assert.equal(fixture.stopBar.y,sampleRoadHeight(state,fixture.stopBar.x,fixture.stopBar.z)+ROAD_SURFACE_HEIGHT);
+    const model=createTileModel(tile,state);warpRoadModel(model,tile,state);
+    model.position.set(tile.x+.5-state.size/2,Math.max(0,tile.elevation),tile.z+.5-state.size/2);model.updateMatrixWorld(true);
+    t.after(()=>model.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();}));
+    const hit=new THREE.Raycaster(new THREE.Vector3(fixture.stopBar.x,30,fixture.stopBar.z),new THREE.Vector3(0,-1,0)).intersectObject(model,true)[0];
+    assert.ok(hit);assert.ok(Math.abs(hit.point.y-fixture.stopBar.y)<1e-5);
+    const centerX=approach.entry.x+.5-state.size/2,centerZ=approach.entry.z+.5-state.size/2;
+    const setback=-(fixture.stopBar.x-centerX)*approach.direction.x-(fixture.stopBar.z-centerZ)*approach.direction.z;
+    assert.ok(Math.abs(setback-(STOP_LINE_OFFSET-.025))<1e-9);
   }
 });
 
@@ -129,23 +119,23 @@ test('protected narrow bends stay unlit and topology changes can remove existing
   network.junctions[0].signalized = false;
   helper.update(state, network.junctions);
   assert.equal(helper.getDebug().count, 0);
-  assert.equal(mesh(helper, 'stop-bars').count, 0);
+  assert.equal(helper.group.getObjectByName('traffic-signal-stop-bars'), undefined);
   network.junctions[0].signalized = true;
   helper.update(state, network.junctions);
   assert.equal(helper.getDebug().count, 4);
 });
 
-test('large 128-tile maps use ten shared instanced draws and zero point lights', t => {
+test('large 128-tile maps use nine shared instanced draws and zero point lights', t => {
   const state = city(128);
   for (const tile of state.tiles) if ((tile.x % 4 === 0 || tile.z % 4 === 0) && tile.x > 0 && tile.z > 0 && tile.x < 127 && tile.z < 127) tile.kind = 'road';
   const network = buildRoadNetwork(state), helper = createTrafficSignals(state, network.junctions); t.after(() => helper.dispose());
   assert.ok(helper.getDebug().count > 3000);
-  assert.equal(helper.getDebug().drawCalls, 10);
+  assert.equal(helper.getDebug().drawCalls, 9);
   assert.equal(helper.getDebug().pointLights, 0);
   assert.ok(helper.group.children.every(object => object instanceof THREE.InstancedMesh));
-  assert.equal(helper.group.children.length, 10);
+  assert.equal(helper.group.children.length, 9);
   assert.equal(helper.getDebug().positions.length, 128, 'Diagnostics stay bounded as the map grows');
-  assert.equal(new Set(helper.group.children.map(object => (object as THREE.InstancedMesh).geometry)).size, 5);
+  assert.equal(new Set(helper.group.children.map(object => (object as THREE.InstancedMesh).geometry)).size, 4);
 });
 
 test('unchanged phases reuse buffers, growth reuses materials, and disposal releases owned resources once', () => {

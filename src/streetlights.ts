@@ -1,13 +1,11 @@
 import * as THREE from 'three';
 import { sampleRoadHeight } from './road-graphics';
+import { createStreetlightField } from './streetlight-field';
 import type { CityState, Tile } from './types';
 
 type Quality = 'performance' | 'balanced' | 'ultra';
-const MAX_POINT_LIGHTS = 10;
-const POINT_LIMIT: Record<Quality, number> = { performance: 4, balanced: 8, ultra: 10 };
-const POOL_INTERVAL = .25;
 const POOL_HALF = .445;
-const POOL_LIFT = .055;
+const POOL_LIFT = .0457;
 const WARM_LIGHT = 0xffdfa2;
 const LEGACY_PARTS = [
   { type: 'CylinderGeometry', position: [-.413, .265, .405], scale: [.025, .48, .025] },
@@ -75,7 +73,7 @@ export function getRoadStreetlightFixture(state: CityState, tile: Tile): {
   };
 }
 
-/** Instanced road fixtures plus a fixed, shadow-free real-light budget. */
+/** Instanced fixtures and illumination for every powered lamp, independent of the camera. */
 export function createStreetlights(initialState: CityState) {
   const group = new THREE.Group();
   group.name = 'streetlights';
@@ -112,22 +110,14 @@ export function createStreetlights(initialState: CityState) {
   const materials = [metal, footing, unlitLens, litLens, poolMaterial];
   const transform = new THREE.Object3D(), matrix = new THREE.Matrix4();
   const xAxis = new THREE.Vector3(1, 0, 0), delta = new THREE.Vector3();
-  const focus = new THREE.Vector3();
-  const lights = Array.from({ length: MAX_POINT_LIGHTS }, (_, index) => {
-    const light = new THREE.PointLight(WARM_LIGHT, 0, 1.85, 2);
-    light.name = `streetlight-local-${index}`;
-    light.castShadow = false;
-    group.add(light);
-    return light;
-  });
+  const field = createStreetlightField(initialState.size);
   let capacity = 0, signature = '', disposed = false;
-  let quality: Quality = 'balanced', blend = 0, enabled = initialState.settings.buildingLights ?? true;
-  let nightStrength = 0, timeUntilSelection = 0;
+  let blend = 0, enabled = initialState.settings.buildingLights ?? true;
+  let nightStrength = 0;
   let lamps: Lamp[] = [], poweredLamps: Lamp[] = [];
   let batches: THREE.InstancedMesh[] = [];
   let bases: THREE.InstancedMesh, poles: THREE.InstancedMesh, arms: THREE.InstancedMesh;
   let housings: THREE.InstancedMesh, offLenses: THREE.InstancedMesh, onLenses: THREE.InstancedMesh, pools: THREE.InstancedMesh;
-  const selected: Lamp[] = [];
 
   function makeBatch(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, multiplier = 1) {
     const mesh = new THREE.InstancedMesh(geometry, material, capacity * multiplier);
@@ -167,33 +157,13 @@ export function createStreetlights(initialState: CityState) {
     batch.setMatrixAt(index, transform.matrix);
   }
 
-  function selectPointLights() {
-    selected.length = 0;
-    const distances: number[] = [];
-    const cap = POINT_LIMIT[quality];
-    for (const lamp of poweredLamps) {
-      const distance = (lamp.bulb.x - focus.x) ** 2 + (lamp.bulb.z - focus.z) ** 2;
-      let index = 0;
-      while (index < distances.length && distances[index] <= distance) index++;
-      if (index >= cap) continue;
-      distances.splice(index, 0, distance); selected.splice(index, 0, lamp);
-      if (selected.length > cap) { selected.pop(); distances.pop(); }
-    }
-    for (let index = 0; index < lights.length; index++) {
-      const lamp = selected[index], light = lights[index];
-      if (lamp) { light.position.copy(lamp.bulb); light.position.y -= .022; }
-      light.intensity = lamp && enabled ? .55 * nightStrength : 0;
-    }
-    timeUntilSelection = POOL_INTERVAL;
-  }
-
   function applyLighting() {
     nightStrength = THREE.MathUtils.smoothstep(blend, .08, .72);
     litLens.emissiveIntensity = enabled ? .1 + 3.6 * blend : 0;
     poolMaterial.emissiveIntensity = enabled ? nightStrength : 0;
     poolMaterial.opacity = enabled ? .38 * nightStrength : 0;
     pools.visible = enabled && poweredLamps.length > 0 && nightStrength > 0;
-    for (let index = 0; index < lights.length; index++) lights[index].intensity = enabled && selected[index] ? .55 * nightStrength : 0;
+    field.setStrength(enabled ? nightStrength : 0);
   }
 
   function update(state: CityState) {
@@ -257,7 +227,7 @@ export function createStreetlights(initialState: CityState) {
       batch.instanceMatrix.needsUpdate = true;
       batch.computeBoundingBox(); batch.computeBoundingSphere();
     }
-    selectPointLights(); applyLighting();
+    field.update(poweredLamps); applyLighting();
   }
 
   update(initialState);
@@ -268,33 +238,26 @@ export function createStreetlights(initialState: CityState) {
       blend = THREE.MathUtils.clamp(Number.isFinite(nightBlend) ? nightBlend : 0, 0, 1);
       enabled = value; applyLighting();
     },
-    animate(dt: number, target: THREE.Vector3) {
-      if (disposed) return;
-      if (Number.isFinite(target.x) && Number.isFinite(target.z)) focus.copy(target);
-      timeUntilSelection -= Number.isFinite(dt) ? Math.max(0, dt) : 0;
-      if (timeUntilSelection <= 0) selectPointLights();
-    },
-    setQuality(value: Quality) {
-      if (disposed || quality === value) return;
-      quality = value; selectPointLights();
-    },
+    applyTo:field.applyTo,
+    animate(_dt: number, _target: THREE.Vector3) { /* Light assignment is world-fixed. */ },
+    setQuality(_value: Quality) { /* All presets retain every supplied lamp. */ },
     getDebug() {
       return { count: lamps.length, litCount: enabled ? poweredLamps.length : 0,
-        pointLights: lights.length, activePointLights: lights.filter(light => light.intensity > 0).length,
+        pointLights: 0, activePointLights: 0, field:field.getDebug(),
         groundPools: !disposed && pools.visible ? pools.count / 2 : 0, enabled, nightBlend: blend,
         positions: lamps.slice(0, 128).map(lamp => ({ id: lamp.id, x: lamp.bulb.x, y: lamp.bulb.y, z: lamp.bulb.z, powered: lamp.powered })),
-        points: lights.map((light, index) => ({ id: selected[index]?.id ?? null, x: light.position.x, y: light.position.y, z: light.position.z, intensity: light.intensity })),
+        points: [],
       };
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const light of lights) { light.intensity = 0; light.dispose(); }
+      field.dispose();
       for (const batch of batches) batch.dispose();
       geometries.forEach(geometry => geometry.dispose());
       materials.forEach(material => material.dispose());
       texture.dispose();
-      lamps = []; poweredLamps = []; selected.length = 0;
+      lamps = []; poweredLamps = [];
       group.clear(); group.removeFromParent();
     },
   };

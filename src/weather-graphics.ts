@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { sampleGroundHeight } from './terrain-graphics';
+import { sampleRoadHeight } from './road-graphics';
+import { ROAD_SURFACE_HEIGHT } from './road-surface';
 import type { CityState, Tile, Weather } from './types';
 
 const PUDDLE_LIMIT = 160;
@@ -55,6 +57,7 @@ export function createWeatherEffects(scene: THREE.Scene, initialState: CityState
   let state = initialState;
   let weather: Weather = initialState.settings.weather;
   let wet = weather === 'rain';
+  let wetness=wet?1:0,rainStrength=wetness;
   let signature = '';
   let disposed = false;
   const puddles = new THREE.Group();
@@ -131,7 +134,7 @@ export function createWeatherEffects(scene: THREE.Scene, initialState: CityState
       const road = tile.kind === 'road';
       const x = tile.x - state.size / 2 + .5 + (road ? (n - .5) * .22 : 0);
       const z = tile.z - state.size / 2 + .5 + (road ? (hash(tile.x, tile.z, 92) - .5) * .25 : 0);
-      const y = sampleGroundHeight(state, x, z) + .059;
+      const y = road?sampleRoadHeight(state,x,z)+ROAD_SURFACE_HEIGHT+.0006:sampleGroundHeight(state,x,z)+.059;
       const mesh = new THREE.Mesh(geometries[Math.floor(n * geometries.length)], material);
       mesh.position.set(x, y, z);
       mesh.rotation.y = n * Math.PI * 2;
@@ -149,12 +152,19 @@ export function createWeatherEffects(scene: THREE.Scene, initialState: CityState
   function setWeather(value: Weather) {
     weather = value;
     if (weather === 'rain') wet = true;
-    rain.visible = ripples.visible = weather === 'rain';
     update(state);
   }
 
   function animate(dt: number, elapsed: number, target: THREE.Vector3) {
-    if (disposed || weather !== 'rain') return;
+    if (disposed) return;
+    const step=Number.isFinite(dt)?Math.max(0,Math.min(dt,.25)):0;
+    rainStrength=THREE.MathUtils.damp(rainStrength,weather==='rain'?1:0,1.4,step);
+    wetness=THREE.MathUtils.clamp(wetness+(weather==='rain'?step*.2:-step/25),0,1);
+    wet=wetness>0||weather==='rain';
+    material.opacity=.76*wetness;puddles.visible=wetness>.001;
+    rainMaterial.opacity=.31*rainStrength;rippleMaterial.opacity=.35*rainStrength;
+    rain.visible=ripples.visible=rainStrength>.001;
+    if(!rain.visible)return;
     rain.position.set(target.x, target.y, target.z);
     const wind = .45 + Math.sin(elapsed * .17) * .15;
     for (let i = 0; i < DROP_COUNT; i++) {
@@ -189,6 +199,8 @@ export function createWeatherEffects(scene: THREE.Scene, initialState: CityState
   update(initialState);
   return {
     update, setWeather, animate,
+    isWet:()=>wetness>.04||weather==='rain',
+    getDebug:()=>({weather,wetness,rainStrength,puddles:puddles.visible?puddlePoints.length:0}),
     dispose() {
       if (disposed) return;
       disposed = true;

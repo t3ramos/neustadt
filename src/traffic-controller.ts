@@ -31,7 +31,7 @@ export function createTrafficController(initial:RoadNetwork,options:Partial<Traf
   let time=0,completed=0;
   function rebuild(next:RoadNetwork){network=next;for(const key of phases.keys())if(!network.junctions.some(j=>j.id===key))phases.delete(key);for(const [key,r]of reservations)if(!network.junctions.some(j=>j.id===key)||(!network.approaches.has(r.movement.approachId)||r.movement.path.some(p=>!network.roads.has(roadPointKey(p)))))reservations.delete(key);for(const[id,r]of requests)if(!network.approaches.has(r.movement.approachId)||r.movement.path.some(p=>!network.roads.has(roadPointKey(p))))requests.delete(id);for(const j of network.junctions)if(!phases.has(j.id))phases.set(j.id,{index:0,stage:'green',elapsed:0});}
   rebuild(initial);
-  function signalStates():SignalState[]{return network.junctions.flatMap(j=>{const phase=phases.get(j.id)!;return j.approaches.map((a,i)=>({approachId:a.id,junctionId:j.id,color:config.signalsEnabled&&j.signalized!==false&&i===phase.index&&phase.stage!=='allRed'?phase.stage as SignalColor:'red'}));});}
+  function signalStates():SignalState[]{return network.junctions.filter(j=>j.signalized!==false).flatMap(j=>{const phase=phases.get(j.id)!;return j.approaches.map((a,i)=>({approachId:a.id,junctionId:j.id,color:config.signalsEnabled&&j.signalized!==false&&i===phase.index&&phase.stage!=='allRed'?phase.stage as SignalColor:'red'}));});}
   function update(dt:number,snapshots:TrafficVehicle[]){
     vehicles=snapshots;const step=Math.max(0,Number.isFinite(dt)?dt:0);time+=step;
     const ids=new Set(vehicles.map(v=>v.id));for(const id of requests.keys())if(!ids.has(id))requests.delete(id);

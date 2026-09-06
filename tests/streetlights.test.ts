@@ -68,30 +68,31 @@ test('fixtures follow the existing road lattice while only powered, non-burning 
   const helper = createStreetlights(state); t.after(() => helper.dispose());
   helper.setLighting(1, true);
   const { count, litCount, pointLights, activePointLights, ...diagnostics } = helper.getDebug();
-  assert.deepEqual({ count, litCount, pointLights, activePointLights }, { count: 3, litCount: 1, pointLights: 10, activePointLights: 1 });
+  assert.deepEqual({ count, litCount, pointLights, activePointLights }, { count: 3, litCount: 1, pointLights: 0, activePointLights: 0 });
   assert.equal(diagnostics.groundPools, 1); assert.equal(diagnostics.enabled, true); assert.equal(diagnostics.nightBlend, 1);
-  assert.equal(diagnostics.positions.length, 3); assert.equal(diagnostics.points.length, 10);
+  assert.equal(diagnostics.positions.length, 3); assert.equal(diagnostics.points.length, 0);
   const fixture = getRoadStreetlightFixture(state, state.tiles[8 * state.size + 10])!;
   assert.deepEqual(diagnostics.positions[0], { id: 8 * state.size + 10, x: fixture.bulb.x, y: fixture.bulb.y, z: fixture.bulb.z, powered: true });
-  assert.equal(diagnostics.points.filter(point => point.intensity > 0).length, 1);
+  assert.equal(diagnostics.field.sources, 1);
   assert.equal(mesh(helper, 'bases').count, 3);
   assert.equal(mesh(helper, 'off-lenses').count, 2);
   assert.equal(mesh(helper, 'lit-lenses').count, 1);
   assert.equal(mesh(helper, 'ground-pools').count, 2);
 });
 
-test('day, night and switch-off preserve ten visible shadow-free lights with strictly zero off emission', t => {
+test('day, night and switch-off keep every lamp in the field with strictly zero off emission', t => {
   const state = city(); denseRoads(state);
   const helper = createStreetlights(state); t.after(() => helper.dispose());
   const identities = pointLights(helper);
-  assert.equal(identities.length, 10);
+  assert.equal(identities.length, 0);
   helper.setLighting(0, true);
   assert.equal(helper.getDebug().activePointLights, 0);
   assert.equal(material(mesh(helper, 'ground-pools')).emissiveIntensity, 0);
   assert.equal(mesh(helper, 'ground-pools').visible, false);
   assert.ok(material(mesh(helper, 'lit-lenses')).emissiveIntensity > 0);
   helper.setLighting(1, true);
-  assert.equal(helper.getDebug().activePointLights, 8);
+  assert.equal(helper.getDebug().field.sources, helper.getDebug().litCount);
+  assert.equal(helper.getDebug().field.strength, 1);
   assert.ok(material(mesh(helper, 'lit-lenses')).emissiveIntensity > 3);
   assert.ok(material(mesh(helper, 'ground-pools')).opacity > .3);
   for (const light of identities) assert.ok(light.visible && !light.castShadow && light.distance <= 2 && light.decay === 2);
@@ -109,32 +110,26 @@ test('day, night and switch-off preserve ten visible shadow-free lights with str
   assert.equal(helper.getDebug().activePointLights, 0);
 });
 
-test('quality caps and camera selection reuse the light pool and select nearby powered lamps', t => {
-  const state = city(); denseRoads(state);
-  const helper = createStreetlights(state); t.after(() => helper.dispose());
-  const identities = pointLights(helper);
-  helper.setLighting(1, true);
-  helper.setQuality('performance'); assert.equal(helper.getDebug().activePointLights, 4);
-  helper.setQuality('ultra'); assert.equal(helper.getDebug().activePointLights, 10);
-  helper.setQuality('balanced'); assert.equal(helper.getDebug().activePointLights, 8);
-  helper.animate(.3, new THREE.Vector3(-15, 0, -15));
-  const left = identities.filter(light => light.intensity > 0).map(light => light.position.clone());
-  helper.animate(.3, new THREE.Vector3(15, 0, 15));
-  const right = identities.filter(light => light.intensity > 0).map(light => light.position.clone());
-  assert.ok(left.reduce((sum, p) => sum + p.x + p.z, 0) < -70);
-  assert.ok(right.reduce((sum, p) => sum + p.x + p.z, 0) > 70);
-  helper.animate(.01, new THREE.Vector3(-15, 0, -15));
-  assert.deepEqual(identities.filter(light => light.intensity > 0).map(light => light.position.clone()), right, 'Camera selection is throttled');
-  assert.deepEqual(pointLights(helper), identities);
+test('camera movement and quality changes never reassign, disable or cap powered lamps', t => {
+  const state=city();denseRoads(state);
+  const helper=createStreetlights(state);t.after(()=>helper.dispose());helper.setLighting(1,true);
+  const before=helper.getDebug();assert.ok(before.litCount>40);
+  assert.equal(before.field.sources,before.litCount);assert.equal(before.groundPools,before.litCount);
+  for(const quality of ['performance','balanced','ultra'] as const){
+    helper.setQuality(quality);
+    for(const target of [new THREE.Vector3(-15,0,-15),new THREE.Vector3(15,0,15),new THREE.Vector3(1000,0,1000)]){
+      helper.animate(1,target);assert.deepEqual(helper.getDebug(),before);
+    }
+  }
 });
 
 test('power loss, fire and road removal refresh active light assignments without stale illumination', t => {
   const state = city(), first = road(state, 10, 8), second = road(state, 16, 8);
   const helper = createStreetlights(state); t.after(() => helper.dispose()); helper.setLighting(1, true);
-  assert.equal(helper.getDebug().activePointLights, 2);
+  assert.equal(helper.getDebug().field.sources, 2);
   first.powered = false; helper.update(state);
   assert.equal(helper.getDebug().litCount, 1);
-  assert.equal(helper.getDebug().activePointLights, 1);
+  assert.equal(helper.getDebug().field.sources, 1);
   second.fire = 1; helper.update(state);
   assert.equal(helper.getDebug().litCount, 0);
   assert.ok(pointLights(helper).every(light => light.intensity === 0));
@@ -143,7 +138,7 @@ test('power loss, fire and road removal refresh active light assignments without
   assert.equal(helper.getDebug().count, 0);
   assert.equal(mesh(helper, 'poles').count, 0);
   assert.equal(mesh(helper, 'ground-pools').count, 0);
-  assert.equal(pointLights(helper).length, 10);
+  assert.equal(pointLights(helper).length, 0);
 });
 
 test('fixture bases and every pool triangle conform to the actual nonplanar road surface', t => {
@@ -164,7 +159,7 @@ test('fixture bases and every pool triangle conform to the actual nonplanar road
     const corners = Array.from({ length: 3 }, (_, i) => new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(matrix));
     for (let u = 0; u <= 8; u++) for (let v = 0; v <= 8 - u; v++) {
       const point = corners[0].clone().multiplyScalar(1 - u / 8 - v / 8).addScaledVector(corners[1], u / 8).addScaledVector(corners[2], v / 8);
-      assert.ok(Math.abs(point.y - sampleRoadHeight(state, point.x, point.z) - .055) < .00001,
+      assert.ok(Math.abs(point.y - sampleRoadHeight(state, point.x, point.z) - .0457) < .00001,
         'The entire footprint must follow the road triangle, including its interior');
     }
   }
@@ -173,7 +168,7 @@ test('fixture bases and every pool triangle conform to the actual nonplanar road
   const x = 10.5 - state.size / 2, z = 8.5 - state.size / 2;
   const hits = new THREE.Raycaster(new THREE.Vector3(x + .17, 20, z - .09), new THREE.Vector3(0, -1, 0)).intersectObject(pools);
   assert.ok(hits.length > 0);
-  assert.ok(Math.abs(hits[0].point.y - sampleRoadHeight(state, x + .17, z - .09) - .055) < .00001);
+  assert.ok(Math.abs(hits[0].point.y - sampleRoadHeight(state, x + .17, z - .09) - .0457) < .00001);
 });
 
 test('bridge lamps stay above the deck and neighboring terrain edits invalidate fixture heights', t => {

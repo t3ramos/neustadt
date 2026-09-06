@@ -1,3 +1,4 @@
+import { roadStopMask } from './road-surface';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -409,6 +410,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
         signature += `${tile.kind}:${tile.level}:${tile.variation}:${tile.elevation}:${tile.anchor}:${tile.rotation}:${tile.hasPipe}:${tile.hasPowerLine};`;
         if(isBuildingAnchor(state,tile))signature+=facilityAccessSignature(state,tile);
         if (tile.kind === 'road' || tile.kind === 'rail') {
+          if(tile.kind==='road')signature+=`stop:${roadStopMask(state,tile)};`;
           for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){const neighbor=tileAt(x+dx,z+dz);signature+=`${neighbor?.kind}:${neighbor?.elevation};`;if(neighbor)signature+=facilityAccessSignature(state,neighbor);}
         }
       }
@@ -738,6 +740,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     fireEffects.animate(elapsed,driving.active?driving.selectedCar?.model.position??controls.target:controls.target);
     for(const actors of actorChunks.values()) for(const actor of actors) updateFacilityActors(actor,simulationElapsed,state);
     weatherEffects.animate(dt,elapsed,driving.active?driving.selectedCar?.model.position??controls.target:controls.target);
+    const nextWet=weatherEffects.isWet();if(wetGround!==nextWet){wetGround=nextWet;setModelWet(wetGround);lighting.invalidateReflections();}
     if (selection.visible) selectionMaterial.opacity = 0.58 + Math.sin(elapsed * 2.8) * 0.14;
   }
 
@@ -1146,6 +1149,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     if(Math.abs(timeOfDay-state.settings.timeOfDay)>.025){timeOfDay=state.settings.timeOfDay;applyDaylight(true);}
     weatherEffects.update(state);
     fireEffects.update(state);
+    streetlights.applyTo(scene);
     const event=state.events[0];
     if(event&&event.id!==latestEvent){latestEvent=event.id;if(/Erdbeben|Erdstoß/i.test(event.title))shakeRemaining=1.3;if(/Sturm|Gewitter/i.test(event.title))disasterFlash=1.1;}
     if(weather!==state.settings.weather)setWeather(state.settings.weather);
@@ -1205,7 +1209,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   return {
     cancelInteraction,
     getDiagnostics(){
-      return {cars:cars.map(car=>({id:car.model.id,x:car.model.position.x,y:car.model.position.y,z:car.model.position.z,yaw:car.model.rotation.y,kind:car.model.userData.vehicleKind,label:car.model.userData.vehicleLabel,dimensions:getVehicleDimensions(car.model),controlled:driving.controlsCar(car),waiting:!!car.model.userData.trafficWaiting,waitReason:car.waiting,travelled:car.travelled??0,from:car.from,to:car.to,progress:car.progress,service:car.service?{id:car.service.id,departed:car.service.departed,connected:car.service.route.connected}:null})),traffic:trafficController.getDebug(),trafficSignals:trafficSignals.getDebug(),citizens:citizens.getDebug(),animals:animals.getDebug(),streetlights:streetlights.getDebug(),fires:fireEffects.getDebug(),driving:driving.getStatus(),collisions:collisions.map(event=>({...event,point:{...event.point},normal:{...event.normal}}))};
+      return {cars:cars.map(car=>({id:car.model.id,x:car.model.position.x,y:car.model.position.y,z:car.model.position.z,yaw:car.model.rotation.y,kind:car.model.userData.vehicleKind,label:car.model.userData.vehicleLabel,dimensions:getVehicleDimensions(car.model),controlled:driving.controlsCar(car),waiting:!!car.model.userData.trafficWaiting,waitReason:car.waiting,travelled:car.travelled??0,from:car.from,to:car.to,progress:car.progress,service:car.service?{id:car.service.id,departed:car.service.departed,connected:car.service.route.connected}:null})),traffic:trafficController.getDebug(),trafficSignals:trafficSignals.getDebug(),citizens:citizens.getDebug(),animals:animals.getDebug(),streetlights:streetlights.getDebug(),weather:weatherEffects.getDebug(),fires:fireEffects.getDebug(),driving:driving.getStatus(),collisions:collisions.map(event=>({...event,point:{...event.point},normal:{...event.normal}}))};
     },
     getInteractionTargets(){
       const activeCamera=driving.active?driving.camera:camera;

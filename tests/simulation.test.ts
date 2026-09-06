@@ -434,7 +434,7 @@ test('monthly accounting charges interest and records the resulting treasury in 
 });
 
 test('manual disasters are gated by the setting and each enabled disaster causes real damage', () => {
-  for (const kind of ['fire', 'earthquake', 'flood', 'storm'] as const) {
+  for (const kind of ['fire', 'earthquake', 'storm'] as const) {
     const city = createCity(834, false, 40);
     assert.equal(city.settings.disastersEnabled, false);
     const before = JSON.stringify(city.tiles), month = city.month;
@@ -898,10 +898,10 @@ test('simulation events preserve German and English text through saves and local
     const loaded = deserializeCity(serializeCity(city));
     const loadedEvent = loaded.events.find(candidate => candidate.id === event.id)!;
     assert.equal(localizedEventTitle(loadedEvent), 'Loan paid out');
-    assert.match(localizedEventMessage(loadedEvent), /Monthly interest: 0.5%/);
+    assert.match(localizedEventMessage(loadedEvent), /Interest is included in the running balance/);
     setLocale('de');
     assert.equal(localizedEventTitle(loadedEvent), 'Kredit ausgezahlt');
-    assert.match(localizedEventMessage(loadedEvent), /Monatlicher Zins: 0,5 %/);
+    assert.match(localizedEventMessage(loadedEvent), /Zinsen sind in der laufenden Bilanz enthalten/);
   } finally { setLocale(previous); }
 });
 
