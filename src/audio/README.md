@@ -1,0 +1,11 @@
+# Procedural city sound
+
+`createSoundscape(preferences)` is inert until `unlock()` is called from a real pointer or keyboard gesture. It returns false if Web Audio is unavailable or the browser refuses playback. Call `update(scene.getAudioState())` approximately ten times per second, use `setPreferences()` for settings changes, and call `dispose()` when leaving the app. The application owns preference persistence; the audio module owns no DOM or storage.
+
+Default levels are intentionally quiet: master 0.35, music 0.15, effects 0.30, ambience 0.20. `enabled` mutes everything and `musicEnabled` independently mutes the music bus. Gain, pan, and frequency changes ramp instead of stepping. A compressor softens coincident peaks. Source attenuation is in the scene's one-unit tile coordinates; only the nearest source in each spatial category contributes.
+
+The original score uses slow extended piano-like sine voicings with sparse upper notes. A deterministic noise buffer supplies wind, rain, waterfront, city, rotor, traffic and aircraft textures. The engine responds to throttle and speed. Sirens require a moving vehicle explicitly marked `siren`; a parked ambulance never alarms merely because it exists. Aircraft must be actual scene actors within listening range. No external recordings, recognizable songs, licensed assets, network requests or API keys are used.
+
+There are nine continuous source voices and at most eight short note/bird voices (17 total), independent of city population or actor count. There are no scheduling intervals or catch-up queues. Suspended tabs do not accumulate missed musical notes. On game pause, traffic, engine, siren and aircraft gains fade out; weather, local stationary ambience and the score continue. Bird/insect notes are not newly scheduled while paused. Existing short notes finish naturally.
+
+The focused tests use a fake audio context: they verify gesture lifecycle, disposal, transport pause, parked siren suppression, bounded transient scheduling, preference clamping and engine response without emitting sound. Browser integration must still be checked using actual user-gesture unlock and quiet listening, since mocks do not assess aesthetic balance or browser output-device behavior.

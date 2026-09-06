@@ -1,0 +1,7 @@
+node_modules/
+dist*/
+output/
+.playwright*/
+public/assets/
+package-lock.json
+LICENSE*

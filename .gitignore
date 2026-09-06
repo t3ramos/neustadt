@@ -16,3 +16,6 @@ dist-*/
 coverage/
 playwright-report/
 test-results/
+
+# Browser tooling state is not application source
+.playwright-cli/

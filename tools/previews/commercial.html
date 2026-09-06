@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Commercial Architecture — Actual Models</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #ced7dc;
+        font: 15px system-ui;
+        color: #25303a;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      header {
+        position: absolute;
+        left: 32px;
+        top: 25px;
+      }
+      h1 {
+        font-size: 23px;
+        margin: 0 0 7px;
+      }
+      p {
+        margin: 0;
+        color: #52616c;
+      }
+      button {
+        position: absolute;
+        right: 32px;
+        top: 28px;
+        padding: 10px 18px;
+        border: 1px solid #9daeb8;
+        border-radius: 8px;
+        background: #ffffffd9;
+        color: #25303a;
+        cursor: pointer;
+      }
+      .labels {
+        position: absolute;
+        bottom: 42px;
+        left: 4%;
+        right: 4%;
+        display: flex;
+        justify-content: space-around;
+        pointer-events: none;
+      }
+      .labels div {
+        text-align: center;
+        width: 20%;
+        font-weight: 600;
+      }
+      .labels small {
+        display: block;
+        font-size: 12px;
+        font-weight: 400;
+        margin-top: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Fünf eigenständige Geschäftshäuser</h1>
+      <p>Originalmodelle aus dem Spiel · Entwicklungsstufe 4 · gleich große Grundstücke</p>
+    </header>
+    <button id="lighting">Nachtansicht</button>
+    <div class="labels">
+      <div>Glas-Curtainwall<small>Schlanker Turm · Metallfinnen</small></div>
+      <div>Backstein / Art Déco<small>Gestaffelte Krone · Lochfassade</small></div>
+      <div>Kalkstein-Terrassen<small>Warme Fenster · versetzte Baukörper</small></div>
+      <div>Anthrazit-Turm<small>Vertikale Metallstreifen · Steinsockel</small></div>
+      <div>Verbundener Campus<small>Atrium · Brücken · graue Flachdächer</small></div>
+    </div>
+    <script type="module">
+      import * as THREE from 'three';
+      import { commercialHighrise } from '/src/rendering/buildings/architecture.ts';
+      import { setModelNightBlend } from '/src/rendering/buildings/materials.ts';
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.35;
+      document.body.prepend(renderer.domElement);
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xced7dc);
+      const camera = new THREE.PerspectiveCamera(33, innerWidth / innerHeight, 0.1, 100);
+      camera.position.set(0, 8.5, 21);
+      camera.lookAt(0, 1.65, 0);
+      const sky = new THREE.HemisphereLight(0xe1eeff, 0x7a766d, 2.3);
+      scene.add(sky);
+      const sun = new THREE.DirectionalLight(0xffecd3, 3);
+      sun.position.set(-7, 10, 8);
+      scene.add(sun);
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(80, 80),
+        new THREE.MeshStandardMaterial({ color: 0xb7c0c2, roughness: 1 }),
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.025;
+      scene.add(ground);
+      for (let variation = 0; variation < 5; variation++) {
+        const group = new THREE.Group();
+        commercialHighrise(group, {
+          kind: 'commercial',
+          variation,
+          level: 4,
+          lotWidth: 2,
+          lotDepth: 2,
+        });
+        group.position.set((variation - 2) * 3.05 - 0.5, 0, -0.5);
+        scene.add(group);
+      }
+      let night = false;
+      const render = () => renderer.render(scene, camera);
+      document.querySelector('#lighting').onclick = () => {
+        night = !night;
+        setModelNightBlend(night ? 1 : 0);
+        sky.intensity = night ? 0.35 : 2.3;
+        sun.intensity = night ? 0.18 : 3;
+        scene.background.setHex(night ? 0x192735 : 0xced7dc);
+        document.querySelector('#lighting').textContent = night ? 'Tagesansicht' : 'Nachtansicht';
+        render();
+      };
+      addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+        render();
+      });
+      render();
+      window.__commercialShowroom = { scene, camera, renderer, render };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,66 @@
+{
+  "source": "Provided Blender scene",
+  "sourceSHA256": "a42bee9cbcb80ba0c791d67c4390bdb846a4f4b672dc39abd1985b1c2d8d70a0",
+  "retainedSourceObjects": 42,
+  "originalLogoContours": 6,
+  "triangles": 24292,
+  "meshCount": 10,
+  "materials": 10,
+  "bytes": 1349532,
+  "gltfBounds": {
+    "min": [
+      -1.3688000440597534,
+      0.0,
+      -0.5192000269889832
+    ],
+    "max": [
+      1.3688000440597534,
+      0.9608150124549866,
+      0.569350004196167
+    ]
+  },
+  "note": "Left source building, commercial 3x2 adaptation. Original six contour wordmark mounted high on street-facing facade (+Z), below the roofline, with no entrance duplicate. Rooftop has left solar and ventilation, central rear-half covered separator, furnished right terrace, full-height L-shaped rear glass and perimeter glass railing with aluminum handrail. Rear and far end finished with matching white/dark facade, actual window openings with recessed glazing, thin frames and sills, rear exit, drainage, parapet continuity and closed ground apron. No render entourage.",
+  "frontDirection": [
+    0,
+    0,
+    1
+  ],
+  "anchorOffset": [
+    1,
+    0,
+    0.5
+  ],
+  "alterations": [
+    "Rebuilt rear and far-end walls around actual openings with recessed glazing and thin frames",
+    "Original contour logo moved high on street-facing facade below roofline; lower copy removed",
+    "Left roof solar and ventilation; central cover only over rear half",
+    "Right terrace: dark rustic wooden seated tables with opposing chair pairs and standing tables",
+    "L-shaped rear glass enclosure and remaining perimeter glass balcony railing with aluminum handrail",
+    "Continuous plinth, rear exit, rainwater drainage and roof cap",
+    "Uniform scale 0.59 from initial normalized architecture"
+  ],
+  "rooftop": {
+    "solarPanels": 6,
+    "ventilationUnits": 2,
+    "seatedTables": 2,
+    "chairs": 8,
+    "standingTables": 2,
+    "seating": "Two opposing chair pairs per seated table",
+    "furniture": "Dark rustic wood",
+    "canopy": "Rear half only; front half uncovered",
+    "canopySafePatch": {
+      "x": [
+        -0.22,
+        0.1
+      ],
+      "z": [
+        -0.28,
+        -0.07
+      ],
+      "height": 0.960815
+    },
+    "glazing": "L-shaped full-height rear and side enclosure; remaining perimeter balcony railing with aluminum cap"
+  },
+  "assetSHA256": "2b01d0747b6c1f5fcfeae734d398c648221da01866a89ca13a0dfaf9920cc649",
+  "binaryGeometrySHA256": "5e59b03e90f329dfba6241101aa4832e8cbe3b0abedba66d2028222084d4399e"
+}

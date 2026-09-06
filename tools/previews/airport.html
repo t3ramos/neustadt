@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+  <meta charset="utf-8" /><title>Flughafen-Geometrieprüfung</title
+  ><style>
+    body {
+      margin: 0;
+      background: #15202c;
+      color: white;
+      font: 14px system-ui;
+    }
+    canvas {
+      display: block;
+    }
+    aside {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      background: #14202ceb;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    label {
+      margin-right: 14px;
+    }
+    small {
+      display: block;
+      margin-top: 8px;
+      color: #bfd0db;
+    }
+  </style>
+  <aside>
+    <strong>Flughafen – freier Flugkorridor</strong>
+    <p>
+      <label
+        >Variante
+        <select id="variant">
+          <option>0</option>
+          <option>1</option>
+          <option>2</option>
+          <option>3</option>
+          <option>4</option>
+        </select></label
+      ><label
+        >Ausrichtung
+        <select id="rotation">
+          <option value="0">0°</option>
+          <option value="1">90°</option>
+          <option value="2">180°</option>
+          <option value="3">270°</option>
+        </select></label
+      ><button id="pause">Pause</button>
+    </p>
+    <input
+      id="phase"
+      type="range"
+      min="0"
+      max="52"
+      value="0"
+      step="0.05"
+      style="width: 350px"
+    /><small>Originalmeshes · Originalanimation · Maus: drehen / zoomen</small>
+  </aside>
+  <script type="module" src="./airport-showroom.ts"></script>
+</html>

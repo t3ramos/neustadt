@@ -1,0 +1,183 @@
+.select-menu-trigger {
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 10px 36px 10px 13px;
+  border: 1px solid #dce3d5;
+  border-radius: 10px;
+  background: #f5f6ee;
+  color: #365542;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.16s,
+    border-color 0.16s,
+    box-shadow 0.16s;
+}
+.select-menu-trigger::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.6px solid currentColor;
+  border-bottom: 1.6px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.16s;
+  opacity: 0.65;
+}
+.select-menu-trigger:hover {
+  background: #eaf0e3;
+  border-color: #bdccb4;
+}
+.select-menu-trigger[aria-expanded='true'] {
+  background: #e8efdf;
+  border-color: #a6ba9c;
+  box-shadow: 0 0 0 3px #a3bb8c20;
+}
+.select-menu-trigger[aria-expanded='true']::after {
+  transform: translateY(2px) rotate(225deg);
+}
+.select-menu-trigger:focus-visible {
+  outline: 2px solid #507947;
+  outline-offset: 3px;
+}
+.select-menu-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.form-label > .select-menu-trigger {
+  display: flex;
+  width: 100%;
+  margin-top: 8px;
+}
+.language-control > .select-menu-trigger {
+  border: 0;
+  background: transparent;
+  padding-left: 3px;
+}
+.top-actions .select-menu-trigger {
+  min-height: 36px;
+  height: 36px;
+  font-size: 11px;
+}
+.view-switch .select-menu-trigger {
+  min-height: 36px;
+  height: 36px;
+  max-width: 210px;
+  padding: 6px 27px 6px 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.view-switch .select-menu-trigger::after {
+  right: 10px;
+}
+.select-menu-popup {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 10000;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid #d8e1cf;
+  border-radius: 13px;
+  background: #fcfbf5;
+  color: #304c3a;
+  box-shadow:
+    0 14px 40px #263e3326,
+    0 3px 10px #263e3310;
+  font-family: inherit;
+  font-size: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #b9c9ad transparent;
+  animation: select-menu-in 0.13s ease-out;
+}
+.select-menu-popup[hidden],
+.select-menu-option[hidden] {
+  display: none;
+}
+.select-menu-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 34px 10px 12px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  line-height: 1.45;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.select-menu-option + .select-menu-option {
+  margin-top: 2px;
+}
+.select-menu-option[aria-selected='true'] {
+  color: #315533;
+  font-weight: 700;
+  background: #edf2e6;
+}
+.select-menu-option[aria-selected='true']::after {
+  content: '✓';
+  position: absolute;
+  right: 12px;
+  font-size: 15px;
+}
+.select-menu-option.is-active,
+.select-menu-option:hover {
+  background: #e0ebd6;
+  color: #284c2d;
+}
+.select-menu-option.is-active {
+  box-shadow: inset 0 0 0 1px #bacdae;
+}
+.select-menu-option[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent;
+}
+@keyframes select-menu-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .select-menu-trigger,
+  .select-menu-trigger::after {
+    transition: none;
+  }
+  .select-menu-popup {
+    animation: none;
+  }
+}
+/* The toolbar's square icon-button rule must not constrain the select label. */
+.view-switch .select-menu-trigger {
+  display: inline-flex;
+  width: auto;
+  min-width: 170px;
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+.view-switch .select-menu-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#day-clock {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
