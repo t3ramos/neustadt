@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { CityState } from './types';
-import type { PowerLayout } from './power-layout';
+import type { PowerLayout, PowerService } from './power-layout';
+import { FACILITY_PAVEMENT_HEIGHT, facilityLocalToWorld, facilityWorldToLocal, getFacilityAccess } from './facility-access';
+import { getFootprint, TOOL_DEFS } from './simulation';
+import { isPowerServiceDropClear } from './power-service';
 
 const POLE_HEIGHT = 1.36;
 const ARM_HEIGHT = 1.27;
@@ -30,6 +33,66 @@ export function powerWirePoints(from:THREE.Vector3,to:THREE.Vector3,slack=.08,se
   });
 }
 
+export interface PowerServiceModelPlacement {
+  cabinet: THREE.Vector3;
+  contact: THREE.Vector3;
+  cableStart: THREE.Vector3;
+  /** A connected forecourt needs a cabinet clear of the vehicle lane and a high service riser. */
+  driveway: boolean;
+  overhead: boolean;
+}
+
+/** Render-only adjustment: saved plots, block feeds and their assigned poles never change. */
+export function powerServiceModelPlacement(state: CityState, service: PowerService, pole: THREE.Vector3): PowerServiceModelPlacement {
+  const half = state.size / 2, tile = state.tiles[service.building];
+  const source = ['power', 'wind', 'solar'].includes(tile.kind);
+  const height = source ? .42 : .31, width = source ? .20 : .105, depth = source ? .16 : .07;
+  const cableStart = pole.clone().add(new THREE.Vector3(0, 1.245, .077));
+  const cabinet = new THREE.Vector3(service.targetX - half, service.elevation, service.targetZ - half);
+  const plan = getFacilityAccess(state, tile);
+  if (!plan?.connected) return { cabinet, contact: cabinet.clone().add(new THREE.Vector3(0, height + .145, 0)), cableStart, driveway: false, overhead: true };
+
+  // Content starts .40 inside a property, but the actual drive occupies .44.
+  // Reserve the whole rotated cabinet footing, with a further 2 cm clear shoulder.
+  const inset = plan.laneWidth + Math.hypot(width + .055, depth + .055) / 2 + .02;
+  const minX = plan.center.x - plan.width / 2 + inset, maxX = plan.center.x + plan.width / 2 - inset;
+  const minZ = plan.center.z - plan.depth / 2 + inset, maxZ = plan.center.z + plan.depth / 2 - inset;
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const local = facilityWorldToLocal(plan, { x: cabinet.x, z: cabinet.z });
+  const scaled = facilityLocalToWorld(plan, { x: local.x * plan.contentScale.x, z: local.z * plan.contentScale.z });
+  const preferred = { x: clamp(scaled.x, minX, maxX), z: clamp(scaled.z, minZ, maxZ) };
+  const candidates = [preferred];
+  // Keeping the original ray where possible also keeps its checked street-side path.
+  const dx = cabinet.x - cableStart.x, dz = cabinet.z - cableStart.z;
+  let enter = 0, exit = Infinity;
+  for (const [origin, delta, min, max] of [[cableStart.x, dx, minX, maxX], [cableStart.z, dz, minZ, maxZ]]) {
+    if (Math.abs(delta) < 1e-10) { if (origin < min || origin > max) { enter = Infinity; break; } continue; }
+    const a = (min - origin) / delta, b = (max - origin) / delta;
+    enter = Math.max(enter, Math.min(a, b)); exit = Math.min(exit, Math.max(a, b));
+  }
+  if (enter <= exit && Number.isFinite(enter)) candidates.unshift({ x: cableStart.x + dx * enter, z: cableStart.z + dz * enter });
+  // A ray aimed close to a corner can miss the inset rectangle. Try other points
+  // on the inner plinth, checking the actual public asphalt for every alternative.
+  for (let x = 0; x <= 4; x++) for (let z = 0; z <= 4; z++) candidates.push({ x: minX + (maxX - minX) * x / 4, z: minZ + (maxZ - minZ) * z / 4 });
+  const footprintIds = new Set(getFootprint(state, tile).map(p => p.z * state.size + p.x));
+  const obstructs = (other: CityState['tiles'][number]) => !!TOOL_DEFS[other.kind]?.footprint || ['residential', 'commercial', 'industrial'].includes(other.kind) && other.level > 0;
+  const selected = candidates.find(point => isPowerServiceDropClear(state, state.tiles[service.pole], [point.x + half, point.z + half], footprintIds, obstructs));
+  const target = selected ?? preferred;
+  cabinet.set(target.x, plan.baseY + FACILITY_PAVEMENT_HEIGHT, target.z);
+  const contact = cabinet.clone().add(new THREE.Vector3(0, 1.20, 0));
+  // Both endpoints clear the highest part of this private driveway. The ramp
+  // sampler blends these exact route heights, so this bound also covers steep
+  // shoulders between samples. Extend the physical pole riser on a raised plot
+  // instead of stretching a low wire across the top of its entrance ramp.
+  const pavementTop = Math.max(plan.baseY + FACILITY_PAVEMENT_HEIGHT, ...plan.points.map(point => point.y));
+  const safeEndpoint = pavementTop + .85 + .055 + .007;
+  cableStart.y = Math.max(cableStart.y, safeEndpoint);
+  contact.y = Math.max(contact.y, safeEndpoint);
+  // An exceptionally obstructed plot keeps its electric feed as a buried service
+  // rather than drawing a new public-road crossing to reach the inset cabinet.
+  return { cabinet, contact, cableStart, driveway: true, overhead: !!selected };
+}
+
 /** Small pole, conductor and service-meter meshes merged to one draw per palette entry. */
 export function createPowerGridModel(state:CityState,layout:PowerLayout):THREE.Group {
   const half=state.size/2;
@@ -47,6 +110,7 @@ export function createPowerGridModel(state:CityState,layout:PowerLayout):THREE.G
   const poles=new Map(layout.poles.map(p=>[p.id,p]));
   const servicePoles=new Set(layout.services.map(service=>service.pole));
   const centers=new Map<number,THREE.Vector3>();
+  const serviceRiserHeights=new Map<number,number>();
   const output=new THREE.Group();
   output.name='Connected electricity grid';
   output.userData.utilityCounts={poles:layout.poles.length,spans:layout.spans.length,services:layout.services.length};
@@ -133,7 +197,8 @@ export function createPowerGridModel(state:CityState,layout:PowerLayout):THREE.G
     const pole=centers.get(service.pole);if(!pole)continue;
     const building=state.tiles[service.building];
     const source=building?.kind==='power'||building?.kind==='wind'||building?.kind==='solar';
-    const x=service.targetX-half,z=service.targetZ-half,y=service.elevation;
+    const placement=powerServiceModelPlacement(state,service,pole);
+    const {x,y,z}=placement.cabinet;
     const height=source?.42:.31,width=source?.20:.105,depth=source?.16:.07;
     const angle=Math.atan2(pole.x-x,pole.z-z);
     box(materials.base,x,y+.025,z,width+.055,.05,depth+.055,angle);
@@ -143,9 +208,18 @@ export function createPowerGridModel(state:CityState,layout:PowerLayout):THREE.G
     const facing=new THREE.Vector3(Math.sin(angle),0,Math.cos(angle));
     box(materials.metal,x+facing.x*(depth/2+.007),y+height*.65,z+facing.z*(depth/2+.007),width*.62,height*.30,.014,angle);
     box(service.powered?materials.live:materials.idle,x+facing.x*(depth/2+.017),y+height*.68,z+facing.z*(depth/2+.017),width*.30,.026,.012,angle);
-    const contact=new THREE.Vector3(x,y+height+.145,z);
-    insulator(contact.x,contact.y,contact.z);
-    cable(pole.clone().add(new THREE.Vector3(0,1.245,.077)),contact,.007,.055);
+    const contact=placement.contact;
+    if(placement.driveway&&placement.overhead)rod(new THREE.Vector3(x,y+height+.06,z),new THREE.Vector3(x,contact.y-.08,z),.014,materials.metal);
+    if(placement.overhead){
+      const start=placement.cableStart,ordinaryHeight=pole.y+1.245,priorHeight=serviceRiserHeights.get(service.pole)??ordinaryHeight;
+      if(start.y>priorHeight+.001){
+        rod(new THREE.Vector3(start.x,priorHeight-.075,start.z),new THREE.Vector3(start.x,start.y-.08,start.z),.024,materials.pole);
+        serviceRiserHeights.set(service.pole,start.y);
+      }
+      if(start.y>ordinaryHeight+.001)insulator(start.x,start.y,start.z);
+      insulator(contact.x,contact.y,contact.z);cable(start,contact,.007,.055);
+    }
+    else rod(placement.cableStart,pole.clone().add(new THREE.Vector3(0,.055,.077)),.011,materials.metal);
     // Cable visibly reaches the meter and then enters the foundation through
     // a conduit. No imaginary cable continues through neighboring buildings.
     rod(new THREE.Vector3(x-facing.x*(depth/2+.018),y+.19,z-facing.z*(depth/2+.018)),new THREE.Vector3(x-facing.x*(depth/2+.018),y+.025,z-facing.z*(depth/2+.018)),.011,materials.metal);

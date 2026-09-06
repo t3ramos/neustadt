@@ -64,7 +64,7 @@ function crossesAsphalt(state: CityState, road: Tile, start: [number, number], t
     || west && intersects(0, .165, .34, .835);
 }
 
-function clearDrop(state: CityState, pole: Tile, target: [number, number], footprintIds: Set<number>, obstructs: (tile: Tile) => boolean): boolean {
+export function isPowerServiceDropClear(state: CityState, pole: Tile, target: [number, number], footprintIds: Set<number>, obstructs: (tile: Tile) => boolean): boolean {
   const [poleX, poleZ] = powerPoleCenter(pole);
   // Same cleat as createPowerGridModel; the cable begins south of the mast axis.
   const start: [number, number] = [poleX, poleZ + .077];
@@ -96,7 +96,7 @@ export function powerServiceCandidates(state: CityState, footprint: Point[], obs
   const candidates: PowerServiceCandidate[] = [];
   for (const [pole, distance] of distances) {
     const target = lotTerminal(footprint, state.tiles[pole]);
-    if (clearDrop(state, state.tiles[pole], target, footprintIds, obstructs)) {
+    if (isPowerServiceDropClear(state, state.tiles[pole], target, footprintIds, obstructs)) {
       candidates.push({ pole, distance, targetX: target[0], targetZ: target[1] });
     }
   }

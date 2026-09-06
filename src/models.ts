@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { createDetailedCar } from './vehicle-model';
+import { tr } from './i18n';
+import { getFacilityAccess, sampleFacilityAccessHeight, facilityWorldToLocal, type FacilityAccessPlan } from './facility-access';
 import type { CityState, Tile, Tool } from './types';
 
 // Shared primitives and an intentionally small palette keep an entire city
@@ -18,6 +20,7 @@ const palette = {
 const materialCache = new Map<number, THREE.MeshStandardMaterial>();
 let modelNightBlend = 0;
 let modelWet = false;
+let facilityPavingMaterial: THREE.MeshStandardMaterial | undefined;
 
 function updateWetMaterial(material: THREE.MeshStandardMaterial, color: number): void {
   const isGlass = [palette.glass, palette.glassLight, palette.glassDark].includes(color);
@@ -29,6 +32,7 @@ function updateWetMaterial(material: THREE.MeshStandardMaterial, color: number):
 export function setModelWet(wet: boolean): void {
   modelWet = wet;
   for (const [color, material] of materialCache) updateWetMaterial(material, color);
+  if (facilityPavingMaterial) updateWetMaterial(facilityPavingMaterial, palette.asphalt);
 }
 function updateNightMaterial(material: THREE.MeshStandardMaterial, color: number): void {
   if ([palette.glass, palette.glassLight, palette.glassDark].includes(color)) {
@@ -317,10 +321,11 @@ function commercial(g: THREE.Group, tile: Tile): void {
   }
 }
 
-function industrial(g: THREE.Group, tile: Tile): void {
+function industrial(g: THREE.Group, tile: Tile, connected = false): void {
   const v = Math.abs(tile.variation);
   if (!tile.level) { zone(g, 0xc6a958, v); return; }
-  slab(g, 0xb4b29b);
+  if (connected) foundation(g, 1, 1, 0xb4b29b);
+  else slab(g, 0xb4b29b);
   const h = .34 + Math.min(tile.level, 3) * .105;
   box(g, v % 2 ? 0xb2ae98 : 0xc6b692, -.09, h / 2 + .025, .07, .65, h, .61);
   for (let i = 0; i < 3; i++) {
@@ -345,8 +350,7 @@ function road(g: THREE.Group, tile: Tile, state: CityState): void {
   const connects = (dx: number, dz: number): boolean => {
     const x = tile.x + dx, z = tile.z + dz;
     if (x < 0 || z < 0 || x >= state.size || z >= state.size) return false;
-    const kind = state.tiles[z * state.size + x]?.kind;
-    return kind === 'road' || kind === 'airport' || kind === 'seaport';
+    return state.tiles[z * state.size + x]?.kind === 'road';
   };
   const north = connects(0, -1), east = connects(1, 0), south = connects(0, 1), west = connects(-1, 0);
   const horizontal = east || west;
@@ -358,6 +362,24 @@ function road(g: THREE.Group, tile: Tile, state: CityState): void {
   if (south || (!horizontal && !vertical)) box(g, palette.asphalt, 0, .033, .33, .67, .025, .34);
   if (east) box(g, palette.asphalt, .33, .033, 0, .34, .025, .67);
   if (west) box(g, palette.asphalt, -.33, .033, 0, .34, .025, .67);
+  // A property's selected gate opens the curb at its real lane position.
+  // It is a driveway, so it never invents another arm in intersection markings.
+  for (const [dx, dz] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+    const x = tile.x + dx, z = tile.z + dz;
+    if (x < 0 || z < 0 || x >= state.size || z >= state.size) continue;
+    const neighbor = state.tiles[z * state.size + x];
+    if (!FACILITY_FOOTPRINTS[neighbor.kind] && !(neighbor.kind === 'industrial' && neighbor.level > 0)) continue;
+    const access = getFacilityAccess(state, neighbor);
+    if (!access?.connected || access.road?.x !== tile.x || access.road.z !== tile.z
+      || access.previous?.x !== x || access.previous.z !== z) continue;
+    const end = access.points[access.points.length - 1];
+    const offsetX = end.x - (tile.x - state.size / 2 + .5);
+    const offsetZ = end.z - (tile.z - state.size / 2 + .5);
+    const apron = box(g, palette.asphalt, dx ? dx * .4075 : offsetX, .033,
+      dz ? dz * .4075 : offsetZ, dx ? .185 : access.laneWidth, .025, dz ? .185 : access.laneWidth);
+    apron.name = 'road-facility-apron';
+    apron.userData.drivingSurface = true;
+  }
   if (count <= 2) {
     if ((north && south) || (!horizontal && !vertical) || (vertical && !horizontal)) {
       for (let j = 0; j < 3; j++) box(g, palette.line, 0, .047, (j - 1) * .34, .022, .004, .17);
@@ -418,8 +440,148 @@ function facilityFrame(g: THREE.Group, tile: Tile): THREE.Group {
 }
 
 function foundation(g: THREE.Group, width: number, depth: number, color = palette.concrete): void {
-  box(g, palette.stone, 0, .035, 0, width - .06, .07, depth - .06);
-  box(g, color, 0, .076, 0, width - .13, .014, depth - .13);
+  const base = box(g, palette.stone, 0, .035, 0, width - .06, .07, depth - .06);
+  base.userData.facilityFoundation = 'base';
+  const surface = box(g, color, 0, .076, 0, width - .13, .014, depth - .13);
+  surface.userData.facilityFoundation = 'surface';
+}
+
+/** The visible foundation and driveway use the suspension's height sampler.
+ * Moving only a lane overlay left the old plinth standing across a lower ramp. */
+function facilitySurfaceGeometry(
+  plan: FacilityAccessPlan, tile: Tile, state: CityState,
+  origin: { x: number; z: number }, u: { x: number; z: number }, v: { x: number; z: number },
+  step: number, verticalOffset = 0, sideDepth = 0,
+): THREE.BufferGeometry {
+  const nx = Math.max(1, Math.ceil(Math.hypot(u.x, u.z) / step));
+  const nz = Math.max(1, Math.ceil(Math.hypot(v.x, v.z) / step));
+  const rootX = tile.x - state.size / 2 + .5, rootZ = tile.z - state.size / 2 + .5;
+  const positions: number[] = [], indices: number[] = [];
+  const surfaceY = (x: number, z: number): number =>
+    (sampleFacilityAccessHeight(plan, x + rootX, z + rootZ) ?? plan.baseY + .052) - plan.baseY + verticalOffset;
+  for (let z = 0; z <= nz; z++) for (let x = 0; x <= nx; x++) {
+    const wx = origin.x + u.x * x / nx + v.x * z / nz;
+    const wz = origin.z + u.z * x / nx + v.z * z / nz;
+    const y = sampleFacilityAccessHeight(plan, wx, wz) ?? plan.baseY + .052;
+    positions.push(wx - rootX, y - plan.baseY + verticalOffset, wz - rootZ);
+  }
+  const forward = u.x * v.z - u.z * v.x > 0;
+  type Midpoint = { x: number; y: number; z: number; index?: number };
+  const midpoints = new Map<string, Midpoint>();
+  const midpoint = (a: number, b: number): Midpoint => {
+    const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+    let point = midpoints.get(key);
+    if (!point) {
+      const x = (positions[a * 3] + positions[b * 3]) / 2;
+      const z = (positions[a * 3 + 2] + positions[b * 3 + 2]) / 2;
+      point = { x, y: surfaceY(x, z), z }; midpoints.set(key, point);
+    }
+    return point;
+  };
+  const vertex = (point: Midpoint): number => {
+    if (point.index === undefined) {
+      point.index = positions.length / 3;
+      positions.push(point.x, point.y, point.z);
+    }
+    return point.index;
+  };
+  const triangle = (a: number, b: number, c: number, depth = 0): void => {
+    const ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a);
+    const ay = positions[a * 3 + 1], by = positions[b * 3 + 1], cy = positions[c * 3 + 1];
+    const centerX = (positions[a * 3] + positions[b * 3] + positions[c * 3]) / 3;
+    const centerZ = (positions[a * 3 + 2] + positions[b * 3 + 2] + positions[c * 3 + 2]) / 3;
+    const error = Math.max(Math.abs(ab.y - (ay + by) / 2), Math.abs(bc.y - (by + cy) / 2),
+      Math.abs(ca.y - (cy + ay) / 2), Math.abs(surfaceY(centerX, centerZ) - (ay + by + cy) / 3));
+    // Flat forecourts remain a coarse grid. Only curved slopes and shoulders
+    // need extra vertices: matching grid vertices alone still bridged the
+    // ramp's depression between them and put visible asphalt through tires.
+    if (error > .0015 && depth < 4) {
+      const iab = vertex(ab), ibc = vertex(bc), ica = vertex(ca);
+      triangle(a, iab, ica, depth + 1); triangle(iab, b, ibc, depth + 1);
+      triangle(ica, ibc, c, depth + 1); triangle(iab, ibc, ica, depth + 1);
+    } else indices.push(a, b, c);
+  };
+  for (let z = 0; z < nz; z++) for (let x = 0; x < nx; x++) {
+    const a = z * (nx + 1) + x, b = a + 1, c = a + nx + 1, d = c + 1;
+    if (forward) { triangle(a, c, b); triangle(b, c, d); }
+    else { triangle(a, b, c); triangle(b, d, c); }
+  }
+  // The GPU stores Float32 coordinates. Sample their actual X/Z values too,
+  // otherwise rounding at a tight bend can select a different ramp projection.
+  for (let i = 0; i < positions.length; i += 3) {
+    positions[i] = Math.fround(positions[i]);
+    positions[i + 2] = Math.fround(positions[i + 2]);
+    positions[i + 1] = surfaceY(positions[i], positions[i + 2]);
+  }
+  const surfaceVertexCount = positions.length / 3;
+  if (sideDepth) {
+    const perimeter: number[] = [];
+    for (let x = 0; x <= nx; x++) perimeter.push(x);
+    for (let z = 1; z <= nz; z++) perimeter.push(z * (nx + 1) + nx);
+    for (let x = nx - 1; x >= 0; x--) perimeter.push(nz * (nx + 1) + x);
+    for (let z = nz - 1; z > 0; z--) perimeter.push(z * (nx + 1));
+    for (let i = 0; i < perimeter.length; i++) {
+      const a = perimeter[i] * 3, b = perimeter[(i + 1) % perimeter.length] * 3, n = positions.length / 3;
+      positions.push(...positions.slice(a, a + 3), ...positions.slice(b, b + 3),
+        positions[a], positions[a + 1] - sideDepth, positions[a + 2],
+        positions[b], positions[b + 1] - sideDepth, positions[b + 2]);
+      if (forward) indices.push(n, n + 1, n + 2, n + 1, n + 3, n + 2);
+      else indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.userData.surfaceVertexCount = surfaceVertexCount;
+  geometry.setIndex(indices); geometry.computeVertexNormals();
+  return geometry;
+}
+
+function connectFacilityModel(root: THREE.Group, frame: THREE.Group, plan: FacilityAccessPlan, tile: Tile, state: CityState): void {
+  const content = new THREE.Group();
+  content.name = 'facility-content';
+  content.scale.set(plan.contentScale.x, 1, plan.contentScale.z);
+  content.position.y = plan.kind === 'industrial' ? .027 : -.031;
+  content.position.z = plan.contentOffsetZ ?? 0;
+  for (const child of [...frame.children]) {
+    if (!(child instanceof THREE.Mesh) || !child.userData.facilityFoundation) { content.add(child); continue; }
+    const top = child.userData.facilityFoundation === 'surface';
+    const width = plan.width - (top ? .13 : .06), depth = plan.depth - (top ? .13 : .06);
+    const geometry = facilitySurfaceGeometry(plan, tile, state,
+      { x: plan.center.x - width / 2, z: plan.center.z - depth / 2 },
+      { x: width, z: 0 }, { x: 0, z: depth }, .15, top ? 0 : -.01, top ? .01 : .04);
+    const surface = new THREE.Mesh(geometry, child.material);
+    surface.name = `facility-foundation-${top ? 'surface' : 'base'}`;
+    surface.userData.drivingSurface = true;
+    surface.receiveShadow = true;
+    root.add(surface); frame.remove(child);
+  }
+  frame.add(content);
+  if (!facilityPavingMaterial) {
+    facilityPavingMaterial = modelMaterial(palette.asphalt).clone();
+    facilityPavingMaterial.polygonOffset = true;
+    facilityPavingMaterial.polygonOffsetFactor = -1;
+    facilityPavingMaterial.polygonOffsetUnits = -1;
+  }
+  // The four complete perimeter strips already include the routed section.
+  // Add only the connector outside that ring, avoiding duplicate pavement.
+  const rx = plan.localWidth / 2 - plan.laneWidth / 2, rz = plan.localDepth / 2 - plan.laneWidth / 2;
+  for (const [index, segment] of plan.renderSegments.entries()) {
+    if (plan.kind !== 'industrial' && index >= 4) {
+      const a = facilityWorldToLocal(plan, segment.a), b = facilityWorldToLocal(plan, segment.b);
+      if ([a, b].every(p => Math.abs(p.x) <= rx + 1e-7 && Math.abs(p.z) <= rz + 1e-7)) continue;
+    }
+    const dx = segment.b.x - segment.a.x, dz = segment.b.z - segment.a.z, length = Math.hypot(dx, dz);
+    if (length < 1e-8) continue;
+    const px = -dz / length * segment.width, pz = dx / length * segment.width;
+    const geometry = facilitySurfaceGeometry(plan, tile, state,
+      { x: segment.a.x - px / 2, z: segment.a.z - pz / 2 },
+      { x: dx, z: dz }, { x: px, z: pz }, .09);
+    const lane = new THREE.Mesh(geometry, facilityPavingMaterial);
+    lane.name = 'facility-access-paving';
+    lane.userData.drivingSurface = true;
+    lane.receiveShadow = true;
+    root.add(lane);
+  }
 }
 
 function lamp(g: THREE.Group, x: number, z: number, height = .9): void {
@@ -461,22 +623,6 @@ function officeBlock(g: THREE.Group, x: number, z: number, width: number, depth:
   box(g, palette.glassDark, x, .29, z + depth / 2 + .013, .25, .39, .026);
   box(g, accent, x, .52, z + depth / 2 + .1, .49, .045, .25);
   box(g, palette.metal, x - width * .22, height + .23, z - depth * .22, .22, .14, .26);
-}
-
-function vehicle(g: THREE.Group, x: number, z: number, type: 'police'|'fire'|'ambulance'): THREE.Group {
-  const car = createCar(type === 'fire' ? palette.red : palette.white);
-  if (type === 'fire') {
-    box(car, palette.red, 0, .17, .13, .19, .18, .29);
-    box(car, palette.metal, 0, .278, .08, .13, .022, .34);
-    for (const xx of [-.055, .055]) box(car, palette.white, xx, .295, .1, .015, .015, .3);
-  } else if (type === 'ambulance') {
-    box(car, palette.white, 0, .18, .11, .18, .20, .24);
-    box(car, palette.red, .095, .19, .11, .008, .038, .13);
-    box(car, palette.red, .096, .19, .11, .009, .12, .035);
-  } else box(car, palette.blue, 0, .1, .13, .166, .045, .09);
-  box(car, palette.blue, -.042, .189, -.055, .047, .027, .033);
-  box(car, palette.red, .042, .189, -.055, .047, .027, .033);
-  car.position.set(x, .095, z); g.add(car); return car;
 }
 
 function powerPlant(g: THREE.Group): void {
@@ -537,7 +683,6 @@ function service(g: THREE.Group, kind: Tile['kind']): void {
     box(g, palette.blue, -.3, .89, .217, .35, .21, .035);
     mesh(g, crownGeometry, palette.yellow, -.3, .89, .243, .13, .15, .024);
     box(g, palette.asphalt, 0, .091, .53, 1.8, .022, .66);
-    vehicle(g, .47, .58, 'police'); vehicle(g, .1, .58, 'police');
     flag(g, -.82, .72); tree(g, -.79, -.74, .56, 1);
   } else if (kind === 'fire') {
     foundation(g, 3, 2);
@@ -547,7 +692,6 @@ function service(g: THREE.Group, kind: Tile['kind']): void {
       const x = -.99 + i * .66;
       box(g, palette.dark, x, .40, .267, .51, .57, .022);
       for (let j = 0; j < 4; j++) box(g, palette.metal, x, .44 + j * .064, .282, .46, .013, .008);
-      vehicle(g, x, .47, 'fire');
     }
     box(g, palette.stone, 1.09, .91, -.42, .48, 1.63, .55);
     box(g, palette.red, 1.09, 1.77, -.42, .55, .09, .62);
@@ -569,7 +713,7 @@ function service(g: THREE.Group, kind: Tile['kind']): void {
     cylinder(g, palette.roof, -.15, 2.001, -.5, .69, .009);
     for (const xx of [-.28, -.02]) box(g, palette.white, xx, 2.011, -.5, .04, .008, .31);
     box(g, palette.white, -.15, 2.011, -.5, .26, .008, .04);
-    vehicle(g, .73, 1.12, 'ambulance'); parking(g, -.83, 1.13, 3);
+    parking(g, -.83, 1.13, 3);
     tree(g, -1.29, -.9, .77, 2); tree(g, 1.27, -.92, .73, 1);
     lamp(g, 1.3, 1.26); lamp(g, -1.3, 1.26);
   } else if (kind === 'school') {
@@ -796,10 +940,17 @@ function recyclingPlant(g: THREE.Group): void {
 
 export function createFacilityActors(tile: Tile, _state: CityState): THREE.Group | null {
   if (tile.anchor >= 0 && tile.anchor !== tile.z * _state.size + tile.x) return null;
-  if (!['wind','stadium','airport','seaport','fire','police','hospital'].includes(tile.kind)) return null;
+  // Emergency vehicles belong to the scene's real road fleet. A second set of
+  // decorative cars used to slide along the apron without ever reaching a road.
+  if (!['wind','stadium','airport','seaport'].includes(tile.kind)) return null;
   const g = new THREE.Group();
   g.name = `actors:${tile.kind}:${tile.x},${tile.z}`;
   const frame = facilityFrame(g, tile);
+  const access = getFacilityAccess(_state, tile);
+  if (access?.connected) {
+    frame.scale.set(access.contentScale.x, 1, access.contentScale.z);
+    frame.position.y = -.031;
+  }
   g.userData.kind = tile.kind;
   g.userData.seed = Math.abs(tile.variation);
   if (tile.kind === 'wind') {
@@ -829,9 +980,6 @@ export function createFacilityActors(tile: Tile, _state: CityState): THREE.Group
       box(hook, palette.yellow, 0, .31, 0, .46, .045, .27);
       frame.add(hook);
     }
-  } else {
-    const car = vehicle(frame, 0, .7, tile.kind === 'hospital' ? 'ambulance' : tile.kind as 'fire'|'police');
-    car.name = 'serviceVehicle';
   }
   return g;
 }
@@ -887,14 +1035,6 @@ export function updateFacilityActors(g: THREE.Group, elapsed: number, state: Cit
         hook.position.z = 1.02 + Math.sin(time * .28 + i * 2) * .21;
       }
       break;
-    case 'police': case 'fire': case 'hospital': {
-      const car = frame.getObjectByName('serviceVehicle'); if (!car) break;
-      const [width, depth] = FACILITY_FOOTPRINTS[g.userData.kind as Tile['kind']] ?? [2, 2];
-      const phase = time * .23;
-      car.position.set(Math.sin(phase) * (width / 2 - .32), .095, depth / 2 - .18);
-      car.rotation.y = Math.cos(phase) > 0 ? -Math.PI / 2 : Math.PI / 2;
-      break;
-    }
   }
   g.visible = true;
   // The caller owns the simulation clock. Passing a constant elapsed value
@@ -905,7 +1045,10 @@ export function updateFacilityActors(g: THREE.Group, elapsed: number, state: Cit
 export function createTileModel(tile: Tile, state: CityState): THREE.Group {
   const g = new THREE.Group();
   g.name = `${tile.kind}:${tile.x},${tile.z}`;
-  const facility = FACILITY_FOOTPRINTS[tile.kind] ? facilityFrame(g, tile) : g;
+  const access = FACILITY_FOOTPRINTS[tile.kind] || tile.kind === 'industrial' && tile.level > 0 ? getFacilityAccess(state, tile) : null;
+  const connectedIndustry = tile.kind === 'industrial' && access?.connected;
+  const facility = FACILITY_FOOTPRINTS[tile.kind] ? facilityFrame(g, tile)
+    : connectedIndustry ? facilityFrame(g, { ...tile, rotation: access.rotation as Tile['rotation'] }) : g;
   switch (tile.kind) {
     case 'road': road(g, tile, state); break;
     case 'rail': rail(g, tile, state); break;
@@ -916,7 +1059,7 @@ export function createTileModel(tile: Tile, state: CityState): THREE.Group {
     }
     case 'residential': residential(g, tile); break;
     case 'commercial': commercial(g, tile); break;
-    case 'industrial': industrial(g, tile); break;
+    case 'industrial': industrial(facility, tile, !!connectedIndustry); break;
     case 'power': powerPlant(facility); break;
     case 'waterpump': waterPump(facility); break;
     case 'police': case 'fire': case 'hospital': case 'school': service(facility, tile.kind); break;
@@ -937,6 +1080,7 @@ export function createTileModel(tile: Tile, state: CityState): THREE.Group {
       break;
     default: break;
   }
+  if (access?.connected) connectFacilityModel(g, facility, access, tile, state);
   if (FACILITY_FOOTPRINTS[tile.kind] || tile.level > 0 && ['residential', 'commercial', 'industrial'].includes(tile.kind)) addBuildingWindowLights(g, tile);
   // Burning buildings retain their geometry; fire-effects owns animated flames,
   // smoke and embers independently of these shared static model primitives.
@@ -945,4 +1089,67 @@ export function createTileModel(tile: Tile, state: CityState): THREE.Group {
 
 export function createCar(color: number): THREE.Group {
   return createDetailedCar(color);
+}
+
+export type FacilityServiceVehicleKind = 'firetruck' | 'ambulance' | 'police';
+
+export function refreshFacilityServiceVehicleLabel(car: THREE.Object3D): void {
+  const kind = car.userData.vehicleKind as FacilityServiceVehicleKind;
+  const label = kind === 'firetruck' ? tr('Feuerwehrwagen', 'Fire engine')
+    : kind === 'ambulance' ? tr('Krankenwagen', 'Ambulance')
+      : kind === 'police' ? tr('Polizeiwagen', 'Police car') : undefined;
+  if (label) car.userData.vehicleLabel = car.userData.label = label;
+}
+
+/** Road-going service vehicles share the same +Z chassis and contact metadata. */
+export function createFacilityServiceVehicle(kind: FacilityServiceVehicleKind): THREE.Group {
+  const car = createDetailedCar(kind === 'firetruck' ? palette.red : palette.white,
+    kind === 'firetruck' ? 'truck' : kind === 'ambulance' ? 'van' : 'sedan');
+  car.name = `city-service-${kind}`;
+  if (kind === 'firetruck') {
+    box(car, palette.red, 0, .218, -.102, .208, .205, .35);
+    for (const side of [-1, 1]) {
+      box(car, palette.white, side * .105, .153, -.1, .003, .024, .33);
+      for (const z of [-.209, -.105, -.001]) {
+        box(car, palette.metal, side * .106, .245, z, .003, .096, .087);
+        box(car, palette.dark, side * .108, .197, z, .003, .007, .046);
+      }
+      box(car, palette.metal, side * .057, .34, -.075, .011, .014, .366);
+    }
+    for (let i = 0; i < 9; i++) box(car, palette.white, 0, .34, -.234 + i * .038, .114, .01, .01);
+    box(car, palette.white, 0, .28, .135, .116, .014, .025);
+  } else if (kind === 'ambulance') {
+    for (const side of [-1, 1]) {
+      box(car, palette.red, side * .088, .119, -.05, .003, .025, .211);
+      box(car, palette.red, side * .089, .183, -.067, .003, .022, .065);
+      box(car, palette.red, side * .09, .183, -.067, .003, .067, .022);
+    }
+    box(car, palette.red, 0, .19, -.184, .085, .016, .002);
+    box(car, palette.red, 0, .19, -.185, .016, .062, .002);
+  } else {
+    for (const side of [-1, 1]) box(car, palette.blue, side * .081, .079, -.011, .003, .03, .15);
+    box(car, palette.blue, 0, .093, .119, .093, .008, .04);
+  }
+  const lightY = kind === 'firetruck' ? .289 : kind === 'ambulance' ? .24 : .18;
+  box(car, palette.dark, 0, lightY - .009, kind === 'firetruck' ? .133 : .005, .135, .012, .031);
+  for (const side of [-1, 1]) {
+    const light = box(car, palette.blue, side * .047, lightY, kind === 'firetruck' ? .133 : .005, .039, .02, .034);
+    light.name = `service-beacon-${side}`;
+    light.userData.serviceBeacon = true;
+  }
+  car.userData.vehicleKind = kind;
+  refreshFacilityServiceVehicleLabel(car);
+  car.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(car);
+  // The shared chassis includes a small modeling offset beneath the wheels.
+  // Service routes provide their own road clearance, so their root is the tire
+  // contact plane instead of adding both offsets and visibly hovering.
+  for (const part of car.children) part.position.y -= bounds.min.y;
+  car.updateMatrixWorld(true);
+  bounds.setFromObject(car);
+  const size = bounds.getSize(new THREE.Vector3());
+  car.userData.vehicleDimensions = { ...car.userData.vehicleDimensions, width: size.x, length: size.z, height: bounds.max.y };
+  car.userData.collisionHalfWidth = Math.max(Math.abs(bounds.min.x), Math.abs(bounds.max.x));
+  car.userData.collisionHalfLength = Math.max(Math.abs(bounds.min.z), Math.abs(bounds.max.z));
+  return car;
 }

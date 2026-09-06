@@ -150,3 +150,78 @@ test('disposal releases exactly owned resources, detaches the group and makes la
   assert.equal(scene.children.length, 0); assert.equal(effects.group.children.length, 0);
   assert.equal(effects.getDebug().visibleBuildings, 0); assert.equal(effects.getDebug().drawCalls, 0);
 });
+
+function connectedRoofFixture(kind: TileKind, rotation: Tile['rotation'], side: 'north' | 'east' | 'south' | 'west') {
+  const state = city(), tile = burn(state, 12, 12, kind, kind === 'industrial' ? 2 : 1);
+  tile.rotation = rotation;
+  const [width, depth] = getModelFootprint(kind, rotation);
+  if (kind !== 'industrial') {
+    tile.anchor = tile.z*state.size+tile.x;
+    for (let dz = 0; dz < depth; dz++) for (let dx = 0; dx < width; dx++) {
+      Object.assign(state.tiles[(tile.z+dz)*state.size+tile.x+dx], tile, { x: tile.x+dx, z: tile.z+dz });
+    }
+  }
+  const x = side === 'west' ? tile.x-1 : side === 'east' ? tile.x+width : tile.x+Math.floor(width/2);
+  const z = side === 'north' ? tile.z-1 : side === 'south' ? tile.z+depth : tile.z+Math.floor(depth/2);
+  const road = state.tiles[z*state.size+x]; road.kind = 'road';
+  return { state, tile, road };
+}
+
+function assertRoofsFollowActualContent(state: CityState, tile: Tile) {
+  const model = createTileModel(tile, state), content = model.getObjectByName('facility-content');
+  assert.ok(content, `${tile.kind} must render connected inset content`);
+  model.updateMatrixWorld(true);
+  const [baseWidth, baseDepth] = getModelFootprint(tile.kind, 0);
+  const unconnected = getFirePatches({ ...tile, rotation: 0 });
+  const actual = getFirePatches(tile, state);
+  assert.equal(actual.length, unconnected.length);
+  for (let i = 0; i < actual.length; i++) {
+    const local = unconnected[i], roof = actual[i];
+    const center = new THREE.Vector3(local.x-(baseWidth-1)/2, local.y, local.z-(baseDepth-1)/2);
+    const expected = center.clone().applyMatrix4(content.matrixWorld);
+    const corners = new THREE.Box3();
+    for (const sx of [-1,1]) for (const sz of [-1,1]) {
+      corners.expandByPoint(center.clone().add(new THREE.Vector3(sx*local.width/2, 0, sz*local.depth/2)).applyMatrix4(content.matrixWorld));
+    }
+    const label = `${tile.kind}:${tile.rotation}: roof ${i}`;
+    assert.ok(Math.abs(roof.x-expected.x) < 1e-9 && Math.abs(roof.z-expected.z) < 1e-9, `${label} centre must follow actual model matrix`);
+    assert.ok(Math.abs(roof.y-expected.y) < 1e-9, `${label} fire must follow raised/lowered content`);
+    assert.ok(Math.abs(roof.width-(corners.max.x-corners.min.x)) < 1e-9, `${label} width must fit inset roof`);
+    assert.ok(Math.abs(roof.depth-(corners.max.z-corners.min.z)) < 1e-9, `${label} depth must fit inset roof`);
+  }
+}
+
+test('connected civic fires follow actual inset roof geometry in every saved orientation', () => {
+  const kinds: TileKind[] = ['power','waterpump','police','fire','hospital','school','university','stadium','airport','seaport','wind','solar','recycling'];
+  for (const kind of kinds) for (const rotation of [0,1,2,3] as const) {
+    const { state, tile } = connectedRoofFixture(kind, rotation, 'north');
+    assertRoofsFollowActualContent(state, tile);
+  }
+});
+
+test('factory fire follows its loading apron shift and road-facing orientation on every side', () => {
+  for (const side of ['north','east','south','west'] as const) {
+    const { state, tile } = connectedRoofFixture('industrial', 0, side);
+    const savedRotation = tile.rotation;
+    assertRoofsFollowActualContent(state, tile);
+    assert.equal(tile.rotation, savedRotation, 'Effects must not persist the derived factory orientation');
+  }
+});
+
+test('active particles return to original factory roofs when the access road is removed', t => {
+  const { state, tile, road } = connectedRoofFixture('industrial', 0, 'east');
+  const effects = createFireEffects(state); t.after(() => effects.dispose());
+  const origins = batch(effects, 'flames').geometry.getAttribute('aOrigin');
+  const connectedPosition = [origins.getX(0), origins.getY(0), origins.getZ(0)];
+  const connectedRoof = getFirePatches(tile, state)[0];
+  const half = state.size/2;
+  for (let i = 0; i < 6; i++) {
+    assert.ok(Math.abs(origins.getX(i)-(tile.x-half+.5+connectedRoof.x)) <= connectedRoof.width*.4);
+    assert.ok(Math.abs(origins.getZ(i)-(tile.z-half+.5+connectedRoof.z)) <= connectedRoof.depth*.4);
+    assert.ok(Math.abs(origins.getY(i)-(connectedRoof.y-.025)) < 1e-6);
+  }
+  road.kind = 'empty'; effects.update(state);
+  assert.deepEqual(getFirePatches(tile, state), getFirePatches(tile));
+  assert.notDeepEqual([origins.getX(0), origins.getY(0), origins.getZ(0)], connectedPosition);
+  assert.equal(effects.getDebug().burningBuildings, 1); assert.equal(effects.getDebug().drawCalls, 3);
+});

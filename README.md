@@ -38,11 +38,13 @@ An existing save opens automatically with the simulation paused. On your first v
 
 1. **Draw roads.** Lots need a road within two tiles. Roads follow the terrain, and roads over water become bridges. The preview shows the footprint, cost, and obstacles before you release the mouse.
 2. **Connect power and water.** Roads, electricity, and water pipes are separate networks. Connect the power plant with power lines and the waterworks with pipes. **One power connection serves a connected block:** residential, commercial, and industrial zones sharing tile edges pass electricity to each other, including zoned lots that have not developed yet. Ordinary zoned buildings need no individual overhead cables or service connections, including their high-rises. Roads and open gaps separate blocks unless you explicitly connect them with power lines. Only large facilities with multi-tile footprints can receive a visible dedicated service cable. It terminates at the lot boundary on the same side of the street and must not cross the roadway or another building. Water pipes supply lots within two tiles; the waterworks itself needs power. Explicitly placed utility lines can run beneath roads and buildings, with visible electricity poles in open land. Use the **Power** and **Water** overlays to check coverage.
-3. **Zone land.** Housing attracts residents; commerce and industry provide jobs. Buildings develop automatically when demand, utilities, and happiness are sufficient. Missing utilities can cause them to shrink. Houses, apartments, shops, high-rises, and factories show the city's growth.
+3. **Zone land.** For residential, commercial, or industrial zones, drag from one corner to the opposite corner to select a rectangle. Both corner tiles are included, and you can drag in any direction. Moving back toward the starting corner shrinks the area and its cost before you release. Housing attracts residents; commerce and industry provide jobs. Buildings develop automatically when demand, utilities, and happiness are sufficient. Missing utilities can cause them to shrink. Houses, apartments, shops, high-rises, and factories show the city's growth.
 4. **Support quality of life.** Parks, police, fire stations, clinics, and education facilities serve their surroundings. Industry and fossil-fuel power plants pollute nearby lots. City services need roads, power, and water; their budgets determine their effectiveness.
 5. **Balance the budget.** Taxes affect income and happiness. Police, fire, health, and education have separate budgets. Borrow and repay in €10,000 steps, up to €50,000 of debt; monthly interest is 0.5%.
 
 Basic utilities provide **6,000 power units per power plant** and **6,000 water units per supplied waterworks**. Later, wind farms provide 1,200 and solar farms 3,200 power units. Check capacity as well as continuous connections: a disconnected network is not supplied by a plant elsewhere on the map.
+
+**Review before building:** the floating preview shows the current area, dimensions, cost, and placement warnings and stays within the visible window. Release over the game world to build. **Right-click or Esc** cancels an unfinished draft while keeping the current tool selected; use **V** or **Select** when you want to inspect lots instead. Releasing over a menu or control panel, outside the playable world, or after an interrupted pointer interaction cancels the draft. Opening a dialog also cancels an unfinished draft.
 
 At **1×**, a game month takes about five seconds. The bottom bar also offers **2×**, **3×**, and pause. Dialogs and a hidden browser tab pause the simulation.
 
@@ -51,6 +53,8 @@ At **1×**, a game month takes about five seconds. The bottom bar also offers **
 Use **Terrain** tools to raise or lower undeveloped land in **5-meter steps**. **Level** uses the height of the first clicked tile for the area you edit. The cost is **€35 per tile for each 5-meter change**. Lowering land below sea level creates water; raising it creates land. Clear developed tiles before changing their height.
 
 Public facilities are **single buildings occupying continuous footprints**. They need an empty, dry, level site. Press **R** to rotate the building and footprint. Demolition removes the entire facility.
+
+**Driveways and yards:** all 13 large facility types support paved access from an adjacent road, including rotated placements. Usable sites have a continuous driveway and ramp into the forecourt or parking area, with the same surface used for the visible pavement and vehicle wheels. Roads may meet the front, side, or rear; the route stays within the existing lot and does not move saved buildings or neighboring tiles. Put a road directly beside the lot and keep a manageable height difference. Industrial buildings have a smaller loading apron; if the road is too steep for a usable ramp, the site is not treated as having a drivable entrance.
 
 | Facility | Footprint | Construction | Operation / month |
 | --- | ---: | ---: | ---: |
@@ -99,23 +103,30 @@ The **city goal** requires **six consecutive months** with all of the following:
 | **M**, then left drag | Pan the camera |
 | **W A S D / arrow keys** | Move the camera |
 | Middle mouse or **Alt + left drag** | Pan the camera |
-| Right drag / **Q and E** | Rotate the camera |
+| Right drag, with no active draft / **Q and E** | Rotate the camera |
+| Right-click during a building drag | Cancel the draft; keep the current tool |
 | Mouse wheel | Zoom |
 | **1 / 2 / 3 / 4 / 5** | Road / residential / commercial / industrial / park |
-| **B / V / C** | Demolish / inspect lot / grab resident |
+| **B / V / C** | Demolish / select and inspect a lot / grab resident |
 | **R** | Rotate a large facility |
-| **Space** | Pause / resume at 1× |
+| **Space**, with the game world focused | Pause / resume at 1× |
 | **G / N / H** | Grid / switch day or night / game help |
 | **L** | Toggle city lights |
 | **Cmd/Ctrl + S** | Save |
-| **Cmd/Ctrl + Z** | Undo |
-| **Esc** | Leave the car, close a dialog, or activate the selection tool |
+| **Cmd/Ctrl + Z** | Undo the latest available construction or disaster action |
+| **Esc** | Leave the car, close a dialog, or cancel a draft; keep the construction tool |
 
-The **globe** shows the whole region; the **crosshair** returns to the city center. Click the minimap to move the view directly to a location. Find navigation help under **City menu → Camera & residents**.
+The **globe** shows the whole region; the **crosshair** returns to the city center. Click the minimap to move the view directly to a location. Find navigation help under **City menu → Camera & residents**. The **City journal** is always available from the city menu, including in narrow laptop and mobile-sized layouts.
+
+**Keyboard in menus:** Tab and Shift+Tab move between dialog controls. Focused buttons keep their normal Enter/Space behavior; game shortcuts do not take over while you operate menu controls or type in a field. Closing a dialog returns focus to the control that opened it, when available. When the same dialog updates, it retains its scroll position and focus where possible. Side panels and dialog content can scroll in smaller windows; NPC speech bubbles stay behind interface panels.
 
 **Drive a car:** press **V** to select, hover over a vehicle, and click its **steering wheel** button. The camera follows the car. **W/S** or **↑/↓** accelerate, brake, and reverse; **A/D** or **←/→** steer. **Space** applies the handbrake: steering while moving and holding it lets the car drift sideways. Press **Esc** to leave the car.
 
 Driving allows **50 km/h on roads near buildings**, **70 km/h on open roads outside developed areas**, and **25 km/h off-road**. Your speed and the current limit appear in the driving display. Sedans, taxis, vans, and trucks have different body shapes and sizes, with round wheels, rims, mirrors, and lights.
+
+**Traffic and signals:** vehicles keep to the right-hand lane. Traffic lights appear automatically at T-junctions and crossroads; closely spaced junctions operate as one group. The visible red, yellow, and green lights follow the same controller as the AI traffic, with a brief all-red interval between approaches. AI vehicles stop at red or yellow, wait for occupied junctions, and enter only when the exit has enough space for the whole vehicle. Unsignalized conflicts use right-hand priority; tight bends and service-yard merges also admit vehicles only when the shared space is clear. Cars queue behind traffic and account for vehicle size, including trucks. Congestion can still occur on crowded or obstructed roads.
+
+**Service vehicles:** police cars, fire engines, and ambulances start in their station or hospital yard. With a usable connection, they drive along the access route and ramp, wait for a safe gap, and join the AI road traffic. You can select their steering-wheel button and drive them yourself, just like the other vehicles.
 
 Vehicles collide with other vehicles and visible building structures. Open forecourts and gaps are drivable when the vehicle fits; water and map boundaries remain obstacles. Residents hit by a vehicle can fall or die from severe impacts. The population-loss and witness rules below apply to these collisions too.
 
@@ -127,7 +138,9 @@ Cats and dogs appear occasionally in residential neighborhoods and parks. Small 
 
 A strong throw activates ragdoll physics; fatal impacts leave a blood mark on the ground or building. A fatal impact or carrying a resident beyond the map edge removes **exactly one resident** from the population. If other residents or a police station are within observation range, happiness also drops by **2 points**; without witnesses, that penalty does not apply. Observation uses a simplified distance rule. Visible residents and vehicles represent a limited sample of city life, not a full simulation of every citizen and commute.
 
-**Undo** retains up to **ten construction and disaster actions** during the current session. The next game month or another state change, such as taxes, loans, weather, or a resident event, clears this history. Pause while planning if you want to undo several building steps.
+**Construction undo** retains up to **ten successful construction actions** in the current city session. It survives game months and changes to settings, taxes, budgets, or loans. Undo reverses the selected construction edit and refunds its actual cost; it does not rewind the calendar, monthly income and expenses, current settings, or unrelated city growth. Undoing a zone removes that placement even if it has since developed; undoing a utility line leaves unrelated development in place. If the affected tiles have changed incompatibly, undo is rejected rather than overwriting the newer state. Claiming a quest reward or triggering a disaster clears the construction history.
+
+**Disaster undo** is separate: the most recent triggered disaster can be reversed only before the next game month or another incompatible city change. Pause before triggering a disaster if you want time to undo it. Neither undo history is stored in save files; reloading, importing a city, or starting a new city begins a fresh history.
 
 ## Weather, graphics, and disasters
 

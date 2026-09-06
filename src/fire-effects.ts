@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getModelFootprint } from './models';
+import { getFacilityAccess } from './facility-access';
 import type { CityState, Tile } from './types';
 
 /** Fixed GPU budget, even if an entire 128 × 128 city catches fire. */
@@ -15,7 +16,7 @@ const patch = (x: number, y: number, z: number, width: number, depth: number): F
 /** The main roof surfaces, excluding antennas, chimneys and floodlight poles.
  * Coordinates match models.ts; using the whole model's maximum height would
  * leave a fire floating over those small rooftop details. */
-export function getFirePatches(tile: Tile): FirePatch[] {
+export function getFirePatches(tile: Tile, state?: CityState): FirePatch[] {
   const v = Math.abs(tile.variation), level = tile.level;
   let roofs: FirePatch[];
   switch (tile.kind) {
@@ -49,14 +50,26 @@ export function getFirePatches(tile: Tile): FirePatch[] {
     default: roofs = [patch(0, .055, 0, .50, .50)]; break;
   }
   const [width, depth] = getModelFootprint(tile.kind, tile.rotation);
-  if (width === 1 && depth === 1) return roofs;
-  const angle = -(tile.rotation ?? 0) * Math.PI / 2, cos = Math.cos(angle), sin = Math.sin(angle);
+  const facility = width > 1 || depth > 1;
+  const access = state && (facility || tile.kind === 'industrial') ? getFacilityAccess(state, tile) : null;
+  const connected = !!access?.connected;
+  if (!facility && !connected) return roofs;
+  // Driveways inset civic architecture; factory aprons additionally shift and
+  // orient the factory toward its access road without changing saved tiles.
+  // Apply the content transform before the outer footprint frame, exactly as
+  // createTileModel does. Fire must follow the roof, not the original plot.
+  const rotation = tile.kind === 'industrial' && connected ? access!.rotation : tile.rotation;
+  const sx = connected ? access!.contentScale.x : 1;
+  const sz = connected ? access!.contentScale.z : 1;
+  const oz = connected ? access!.contentOffsetZ ?? 0 : 0;
+  const oy = connected ? tile.kind === 'industrial' ? .027 : -.031 : 0;
+  const angle = -(rotation ?? 0) * Math.PI / 2, cos = Math.cos(angle), sin = Math.sin(angle);
   return roofs.map(roof => ({
-    x: roof.x * cos + roof.z * sin + (width - 1) / 2,
-    y: roof.y,
-    z: -roof.x * sin + roof.z * cos + (depth - 1) / 2,
-    width: tile.rotation % 2 ? roof.depth : roof.width,
-    depth: tile.rotation % 2 ? roof.width : roof.depth,
+    x: roof.x * sx * cos + (roof.z * sz + oz) * sin + (width - 1) / 2,
+    y: roof.y + oy,
+    z: -roof.x * sx * sin + (roof.z * sz + oz) * cos + (depth - 1) / 2,
+    width: rotation % 2 ? roof.depth * sz : roof.width * sx,
+    depth: rotation % 2 ? roof.width * sx : roof.depth * sz,
   }));
 }
 
@@ -215,7 +228,7 @@ export function createFireEffects(initialState: CityState) {
     let f = 0, s = 0, e = 0;
     const half = state.size / 2;
     for (const site of selected) {
-      const tile = site.tile, roofs = getFirePatches(tile), baseX = tile.x-half+.5, baseZ = tile.z-half+.5;
+      const tile = site.tile, roofs = getFirePatches(tile, state), baseX = tile.x-half+.5, baseZ = tile.z-half+.5;
       const baseY = Math.max(0, tile.elevation), intensity = site.intensity;
       for (let i = 0; i < FLAMES_PER_SITE; i++) {
         const roof = roofs[i % roofs.length], seed = hash(site.id*13+i*37+state.seed)*91;

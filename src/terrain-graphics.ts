@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { CityState, Tile } from './types';
 import { roadCornerHeight } from './road-graphics';
+import { getFacilityAccess, sampleFacilityAccessHeight, facilityAccessSignature, FACILITY_PAVEMENT_HEIGHT } from './facility-access';
 
 export interface TerrainMaterials {
   ground: THREE.MeshStandardMaterial;
@@ -157,6 +158,21 @@ export function buildTerrainChunk(state: CityState, cx: number, cz: number, chun
       continue;
     }
     const inset = FOUNDATION_INSET;
+    const accessPlan=getFacilityAccess(state,tile);
+    if(accessPlan?.connected) {
+      const divisions=16,grid:number[][]=[];
+      for(let iz=0;iz<=divisions;iz++) {
+        const row:number[]=[];
+        for(let ix=0;ix<=divisions;ix++) {
+          const px=x+ix/divisions,pz=z+iz/divisions,wx=px-half,wz=pz-half;
+          const y=sampleGroundHeight(state,wx,wz);
+          row.push(vertex(px,pz,y,[0,1,0]));
+        }
+        grid.push(row);
+      }
+      for(let iz=0;iz<divisions;iz++)for(let ix=0;ix<divisions;ix++)quad(grid[iz][ix],grid[iz][ix+1],grid[iz+1][ix+1],grid[iz+1][ix]);
+      continue;
+    }
     const inner = [vertex(x+inset, z+inset, tile.elevation, [0, 1, 0]), vertex(x+1-inset, z+inset, tile.elevation, [0, 1, 0]), vertex(x+1-inset, z+1-inset, tile.elevation, [0, 1, 0]), vertex(x+inset, z+1-inset, tile.elevation, [0, 1, 0])];
     quad(...inner as [number, number, number, number]);
     for (let side=0; side<4; side++) {
@@ -185,10 +201,13 @@ export function buildTerrainChunk(state: CityState, cx: number, cz: number, chun
 /** FNV signature covers the two-cell halo used for seam-consistent corner normals. */
 export function terrainChunkSignature(state: CityState, cx: number, cz: number, chunk: number): string {
   let signature = 2166136261;
+  const accessSeen=new Set<string>();
   for (let z=Math.max(0, cz-2); z<Math.min(state.size, cz+chunk+2); z++) for (let x=Math.max(0, cx-2); x<Math.min(state.size, cx+chunk+2); x++) {
     const tile = state.tiles[z*state.size+x];
     signature = Math.imul(signature ^ Math.round((tile.elevation+32)*1024), 16777619);
     signature = Math.imul(signature ^ (Number(isFoundation(tile))+(isTransport(tile)?2:0)), 16777619);
+    const access=facilityAccessSignature(state,tile);
+    if(access&&!accessSeen.has(access)){accessSeen.add(access);for(const c of access)signature=Math.imul(signature^c.charCodeAt(0),16777619);}
   }
   return `${state.size}:${state.seed}:${signature>>>0}`;
 }
@@ -203,7 +222,7 @@ function triangleHeight(x: number, z: number, a: number[], b: number[], c: numbe
 }
 
 /** Exact surface height of the triangles above, useful for terrain-aware cursors and vehicles. */
-export function sampleGroundHeight(state: CityState, worldX: number, worldZ: number): number {
+function sampleRawGroundHeight(state: CityState, worldX: number, worldZ: number): number {
   const gx = THREE.MathUtils.clamp(worldX+state.size/2, 0, state.size-1e-8);
   const gz = THREE.MathUtils.clamp(worldZ+state.size/2, 0, state.size-1e-8);
   const x = Math.floor(gx), z = Math.floor(gz), u = gx-x, v = gz-z;
@@ -220,6 +239,18 @@ export function sampleGroundHeight(state: CityState, worldX: number, worldZ: num
     if (y!==null) return y;
   }
   return tile.elevation;
+}
+
+/** The drive cuts its ramp through the original foundation border. This exact
+ * height is sampled by terrain tessellation as well as the vehicle slope test. */
+export function sampleGroundHeight(state:CityState,worldX:number,worldZ:number):number {
+  const raw=sampleRawGroundHeight(state,worldX,worldZ);
+  const x=Math.floor(worldX+state.size/2),z=Math.floor(worldZ+state.size/2);
+  const tile=x>=0&&z>=0&&x<state.size&&z<state.size?state.tiles[z*state.size+x]:undefined;
+  const plan=tile?getFacilityAccess(state,tile):null;
+  if(!plan?.connected)return raw;
+  const access=sampleFacilityAccessHeight(plan,worldX,worldZ);
+  return access===null?raw:Math.min(raw,access-FACILITY_PAVEMENT_HEIGHT);
 }
 
 /** Vertical edge faces only: no overlapping top/bottom planes that shimmer at the map boundary. */

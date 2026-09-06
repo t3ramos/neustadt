@@ -10,6 +10,7 @@
   -webkit-font-smoothing: antialiased;
   --ink: #263e33;
   --muted: #829084;
+  --readable-muted: #5b6c55;
   --green: #375f49;
   --sage: #dfe9d9;
   --line: #dfe3d9;
@@ -38,7 +39,7 @@ button, .topbar, .build-dock, .map-widget, .viewbar { user-select: none; }
 .hidden, [hidden] { display: none !important; }
 .negative { color: #bb7357 !important; }
 .positive { color: #578569 !important; }
-#world { position: absolute; inset: 0; background: #d7e0d8; touch-action: none; }
+#world { position: absolute; inset: 0; background: #d7e0d8; touch-action: none; isolation: isolate; }
 #world canvas { display: block; width: 100%; height: 100%; outline: none; }
 
 .topbar { position: absolute; z-index: 10; inset: 0 0 auto; height: var(--header-height); display: flex; align-items: center; padding: 0 var(--edge); background: var(--paper); border-bottom: 1px solid #ffffff8c; box-shadow: 0 1px 12px #45563c05; gap: 28px; }
@@ -268,4 +269,42 @@ input[type='range'] { display: block; width: 100%; accent-color: #799665; height
 @media (max-height: 690px) {
   .camera-controls { top: auto; bottom: calc(var(--dock-height) + 155px); transform: none; flex-direction: row; }
   .camera-controls > span { width: 1px; height: 21px; margin: 3px; }
+}
+
+/* Instructions and costs must remain readable on the compact paper controls. */
+.tool-name { font-size: 11px; }
+.build-tool small, .build-tool.selected small { font-size: 10px; color: var(--readable-muted); }
+.tool-hint, .tool-hint strong { font-size: 11px; color: var(--readable-muted); }
+.navigation-hint { font-size: 10px; color: var(--readable-muted); }
+.category-tabs button { color: var(--readable-muted); }
+.menu-grid strong { font-size: 12px; color: #47603f; }
+.menu-grid small { font-size: 11px; line-height: 1.4; color: var(--readable-muted); }
+.menu-grid > button > span { min-width: 0; }
+.menu-grid > button > svg { flex-shrink: 0; }
+.menu-city span, .form-label, .modal-note { color: var(--readable-muted); }
+.menu-city span, .form-label { font-size: 11px; }
+.modal-note { font-size: 12px; }
+.graphics-preset strong { font-size: 12px; }
+.graphics-preset small { font-size: 11px; color: var(--readable-muted); }
+.help-steps p, .keyboard-help > span { font-size: 12px; color: var(--readable-muted); }
+kbd { font-size: 10px; color: #526a48; }
+#inspector > p { font-size: 12px; color: var(--readable-muted); }
+.inspector-rows > div { font-size: 11px; }
+.inspector-rows > div > span { color: var(--readable-muted); }
+.inspector-tags span { font-size: 10px; color: #536c48; }
+.budget-card p, .loan-row small { font-size: 11px; color: var(--readable-muted); }
+.budget-card > div, .funding-item label { font-size: 11px; color: var(--readable-muted); }
+.budget-overview small, .funding-item b { font-size: 11px; color: var(--readable-muted); }
+.demand-item > span, .demand-item > b { color: var(--readable-muted); }
+.left-column, #inspector { scrollbar-width: thin; scrollbar-color: #91a184 transparent; overscroll-behavior: contain; }
+.left-column::-webkit-scrollbar, #tool-list::-webkit-scrollbar { display: block; width: 6px; height: 5px; }
+.left-column::-webkit-scrollbar-thumb, #tool-list::-webkit-scrollbar-thumb { background: #91a184; border-radius: 6px; }
+
+@media (max-width: 700px) {
+  .tool-name { font-size: 10px; }
+  .tool-hint, .tool-hint strong { font-size: 10px; }
+  .demand-item { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; row-gap: 4px; font-size: 10px; }
+  .demand-item > span { width: auto; grid-column: 1; grid-row: 1; }
+  .demand-item > b { width: auto; grid-column: 2; grid-row: 1; font-size: 10px; }
+  .demand-track { width: 100%; grid-column: 1 / -1; grid-row: 2; }
 }

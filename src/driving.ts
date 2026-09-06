@@ -6,6 +6,9 @@ import { createDrivingCollisionWorld, type DrivingCollisionWorld } from './drivi
 import { findVehicleContact, resolveVehicleContact, sweepVehicleContact, type VehicleContactBody } from './vehicle-contacts';
 import { refreshVehicleLabel, vehicleKindLabel } from './vehicle-model';
 import { tr } from './i18n';
+import { sampleFacilityAccessAt, getFacilityAccess, FACILITY_PAVEMENT_HEIGHT } from './facility-access';
+import { lanePose } from './road-lanes';
+import { refreshFacilityServiceVehicleLabel } from './models';
 
 /** Cars stay owned by the city scene, including their autonomous route. */
 export interface DrivableCar {
@@ -90,8 +93,11 @@ function tileAtWorld(state: CityState, x: number, z: number): Tile | undefined {
 
 /** The same road surface that supports the visible mesh supports its vehicles. */
 export function drivingSurfaceHeight(state: CityState, x: number, z: number): number {
+  const access=sampleFacilityAccessAt(state,x,z);
+  if(access!==null)return access+BODY_CLEARANCE;
   if (tileAtWorld(state, x, z)?.kind === 'road') return sampleRoadHeight(state, x, z) + .052 + BODY_CLEARANCE;
-  const base = sampleGroundHeight(state, x, z);
+  const tile=tileAtWorld(state,x,z),plan=tile?getFacilityAccess(state,tile):null;
+  const base = plan?.connected ? plan.baseY+FACILITY_PAVEMENT_HEIGHT : sampleGroundHeight(state, x, z);
   return collisionWorldFor(state).surfaceHeight(x, z, base) + BODY_CLEARANCE;
 }
 
@@ -180,8 +186,9 @@ export function stepVehicle(state: CityState, motion: VehicleMotion, input: Driv
   let obstacle = drivingObstacle(state, nextX, nextZ, nextYaw, dimensions);
   // Asphalt is a small traversable curb. Compare the underlying land/deck slope,
   // otherwise that thickness alone would look like a cliff at every road edge.
-  const oldSurface = tileAtWorld(state, motion.x, motion.z)?.kind === 'road' ? sampleRoadHeight(state, motion.x, motion.z) : sampleGroundHeight(state, motion.x, motion.z);
-  const nextSurface = tileAtWorld(state, nextX, nextZ)?.kind === 'road' ? sampleRoadHeight(state, nextX, nextZ) : sampleGroundHeight(state, nextX, nextZ);
+  const slopeSurface=(x:number,z:number)=>{const access=sampleFacilityAccessAt(state,x,z);return access!==null?access-FACILITY_PAVEMENT_HEIGHT:tileAtWorld(state,x,z)?.kind==='road'?sampleRoadHeight(state,x,z):sampleGroundHeight(state,x,z);};
+  const oldSurface = slopeSurface(motion.x,motion.z);
+  const nextSurface = slopeSurface(nextX,nextZ);
   const distance = Math.hypot(nextX - motion.x, nextZ - motion.z);
   if (!obstacle && distance > 1e-7 && Math.abs(nextSurface - oldSurface) > distance * 2.2 + .00001) obstacle = 'Hang zu steil';
   if (obstacle) {
@@ -223,35 +230,33 @@ export function stepVehicle(state: CityState, motion: VehicleMotion, input: Driv
   motion.roll = damp(motion.roll, clamp(Math.atan2(right - left, supportWidth * 2) - motion.angularVelocity * motion.speed * .02, -.55, .55), 12, dt);
 }
 
-interface TrafficRejoin { from: Point; to: Point; progress: number; x: number; z: number; yaw: number; distance: number; }
+interface TrafficRejoin { previous:Point; from: Point; to: Point; progress: number; x: number; z: number; yaw: number; distance: number; }
 
-/** Find the nearest point along a real traffic lane, rather than a tile centre. */
+/** Closest point on the very same straight/curved lane geometry as the AI. */
 function findTrafficRejoin(state: CityState, x: number, z: number, yaw: number): TrafficRejoin | null {
-  let result: TrafficRejoin | null = null, nearest = Infinity;
-  const half = state.size / 2;
-  for (const tile of state.tiles) {
-    if (tile.kind !== 'road') continue;
-    const neighbors = [{ x: tile.x + 1, z: tile.z }, { x: tile.x - 1, z: tile.z }, { x: tile.x, z: tile.z + 1 }, { x: tile.x, z: tile.z - 1 }]
-      .filter(p => p.x >= 0 && p.z >= 0 && p.x < state.size && p.z < state.size && state.tiles[p.z * state.size + p.x].kind === 'road');
-    if (!neighbors.length) continue;
-    for (const to of neighbors) {
-      const dx = to.x - tile.x, dz = to.z - tile.z;
-      const ax = tile.x - half + .5 - dz * .13, az = tile.z - half + .5 + dx * .13;
-      const progress = clamp((x - ax) * dx + (z - az) * dz, 0, .9999);
-      const px = ax + dx * progress, pz = az + dz * progress;
-      const distance = Math.hypot(px - x, pz - z);
-      const alignment = dx * Math.sin(yaw) + dz * Math.cos(yaw);
-      const score = distance + (1 - alignment) * .012;
-      if (score >= nearest) continue;
-      nearest = score;
-      result = { from: { x: tile.x, z: tile.z }, to, progress, x: px, z: pz, yaw: Math.atan2(dx, dz), distance };
+  let result:TrafficRejoin|null=null,nearest=Infinity;
+  const half=state.size/2;
+  for(const tile of state.tiles) {
+    if(tile.kind!=='road'||Math.abs(tile.x+.5-half-x)>1.3||Math.abs(tile.z+.5-half-z)>1.3)continue;
+    const neighbors=[{x:tile.x+1,z:tile.z},{x:tile.x-1,z:tile.z},{x:tile.x,z:tile.z+1},{x:tile.x,z:tile.z-1}]
+      .filter(p=>p.x>=0&&p.z>=0&&p.x<state.size&&p.z<state.size&&state.tiles[p.z*state.size+p.x].kind==='road');
+    for(const previous of neighbors)for(const to of neighbors) {
+      // Coarse search then refine distance along an arclength parameterized curve.
+      const evaluate=(progress:number)=>{const pose=lanePose(previous,tile,to,progress),px=pose.x-half,pz=pose.z-half;return {pose,px,pz,distance:Math.hypot(px-x,pz-z)};};
+      let bestProgress=0,bestDistance=Infinity;
+      for(let i=0;i<=20;i++){const trial=evaluate(i/20);if(trial.distance<bestDistance){bestDistance=trial.distance;bestProgress=i/20;}}
+      let lo=Math.max(0,bestProgress-.05),hi=Math.min(.999999,bestProgress+.05);
+      for(let i=0;i<18;i++){const a=lo+(hi-lo)/3,b=hi-(hi-lo)/3;if(evaluate(a).distance<evaluate(b).distance)hi=b;else lo=a;}
+      const progress=(lo+hi)/2,{pose,px,pz,distance}=evaluate(progress),alignment=pose.tangentX*Math.sin(yaw)+pose.tangentZ*Math.cos(yaw);
+      const score=distance+(1-alignment)*.012;if(score>=nearest)continue;nearest=score;
+      result={previous,from:{x:tile.x,z:tile.z},to,progress,x:px,z:pz,yaw:pose.yaw,distance};
     }
   }
   return result;
 }
 
 function assignTrafficRoute(state: CityState, car: DrivableCar, route: TrafficRejoin): void {
-  car.from = route.from; car.to = route.to; car.previous = { ...route.from }; car.progress = route.progress;
+  car.from = route.from; car.to = route.to; car.previous = { ...route.previous }; car.progress = route.progress;
   car.model.position.set(route.x, drivingSurfaceHeight(state, route.x, route.z), route.z);
   car.model.rotation.set(0, route.yaw, 0, 'YXZ');
 }
@@ -677,7 +682,7 @@ export function createDrivingController(
       state = next; collisionWorldFor(next).setState(next); camera.far = Math.max(500, next.size * 4); camera.updateProjectionMatrix();
     },
     hover, leaveHover() { pointerOverCanvas = false; if (hovered) missedHover = .8; }, clearHover, enter, exit, update, getStatus,
-    refreshLocale() {for(const car of getCars())refreshVehicleLabel(car.model);projectHover(true);emitStatus(true);},
+    refreshLocale() {for(const car of getCars()){refreshVehicleLabel(car.model);refreshFacilityServiceVehicleLabel(car.model);}projectHover(true);emitStatus(true);},
     keyDown(code) {
       if (!selected || !driveKeys.has(code)) return false;
       if (code === 'Escape') exit(); else keys.add(code);

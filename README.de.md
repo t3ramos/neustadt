@@ -38,11 +38,13 @@ Ein vorhandener Spielstand öffnet automatisch und pausiert. Beim ersten Besuch 
 
 1. **Straßen ziehen.** Grundstücke benötigen eine Straße innerhalb von zwei Feldern Abstand. Straßen folgen den Geländehöhen; über Wasser entstehen Brücken. Die Bauvorschau zeigt Baufläche, Kosten und Hindernisse, bevor du loslässt.
 2. **Strom und Wasser verlegen.** Straßen, Stromnetz und Wasserrohre sind eigenständige Netze. Verbinde das Kraftwerk mit Stromleitungen und das Wasserwerk mit Rohren. **Ein Stromanschluss pro zusammenhängendem Block reicht:** Kantenweise verbundene Wohn-, Gewerbe- und Industriegebiete leiten den Strom untereinander weiter, auch bevor dort ein Haus steht. Normale Zonenhäuser benötigen keine einzelnen Freileitungen oder Hausanschlüsse; das gilt auch für ihre Hochhäuser. Straßen und freie Zwischenflächen trennen die Blöcke, solange keine ausdrücklich verlegte Leitung sie verbindet. Nur große Anlagen mit mehrteiliger Baufläche können einen sichtbaren eigenen Anschluss erhalten. Dieser verläuft zur Grundstücksgrenze auf derselben Straßenseite und darf weder die Fahrbahn noch ein fremdes Gebäude kreuzen. Wasserrohre versorgen Grundstücke bis zwei Felder Abstand; das Wasserwerk braucht selbst Strom. Ausdrücklich verlegte Leitungen dürfen unter Straßen und Gebäuden verlaufen, im Freiland sind Strommasten sichtbar. Die Datenansichten **Strom** und **Wasser** helfen beim Prüfen.
-3. **Gebiete ausweisen.** Wohnen schafft Einwohner, Gewerbe und Industrie schaffen Arbeitsplätze. Bei Nachfrage, Versorgung und ausreichender Zufriedenheit wachsen Gebäude selbstständig. Fehlende Versorgung kann zum Rückbau führen. Wohnhäuser, Mehrfamilienhäuser, Geschäfte, Hochhäuser und Fabriken machen den Ausbau sichtbar.
+3. **Gebiete ausweisen.** Ziehe Wohn-, Gewerbe- oder Industriezonen von einer Ecke zur gegenüberliegenden Ecke als Rechteck auf. Beide Eckfelder zählen mit; du kannst in jede Richtung ziehen. Bewegst du die Maus vor dem Loslassen zum Startpunkt zurück, werden Fläche und Kosten wieder kleiner. Wohnen schafft Einwohner, Gewerbe und Industrie schaffen Arbeitsplätze. Bei Nachfrage, Versorgung und ausreichender Zufriedenheit wachsen Gebäude selbstständig. Fehlende Versorgung kann zum Rückbau führen. Wohnhäuser, Mehrfamilienhäuser, Geschäfte, Hochhäuser und Fabriken machen den Ausbau sichtbar.
 4. **Lebensqualität sichern.** Parks, Polizei, Feuerwehr, Kliniken und Bildungseinrichtungen wirken in ihrer Umgebung. Industrie und fossile Kraftwerke belasten Nachbargrundstücke. Stadtdienste benötigen Straße, Strom und Wasser; ihre Budgets bestimmen die Wirkung.
 5. **Den Haushalt ausgleichen.** Steuern beeinflussen Einnahmen und Zufriedenheit. Polizeiwesen, Feuerwehr, Gesundheit und Bildung haben eigene Budgets. Kredite und Rückzahlungen erfolgen in Schritten von 10.000 €, bis maximal 50.000 € Kredit; der Monatszins beträgt 0,5 %.
 
 Die Startversorgung liefert **6.000 Stromeinheiten je Kraftwerk** und **6.000 Wassereinheiten je versorgtem Wasserwerk**. Später liefern Windparks 1.200 und Solarparks 3.200 Stromeinheiten. Achte sowohl auf die Kapazität als auch auf durchgehende Verbindungen: Ein getrenntes Netz wird nicht durch ein Kraftwerk am anderen Ende der Karte versorgt.
+
+**Vor dem Bauen prüfen:** Die schwebende Vorschau zeigt Fläche, Abmessungen, Kosten und Bauhindernisse und bleibt im sichtbaren Fenster. Lass über der Spielwelt los, um zu bauen. **Rechtsklick oder Esc** verwirft einen laufenden Entwurf und lässt dasselbe Werkzeug ausgewählt; mit **V** oder **Auswählen** wechselst du gezielt zur Grundstücksauswahl. Loslassen über einem Menü oder Bedienfeld, außerhalb der bebaubaren Welt oder nach einer unterbrochenen Zeigerinteraktion verwirft den Entwurf. Auch das Öffnen eines Dialogs bricht einen laufenden Entwurf ab.
 
 Bei **1×** dauert ein Spielmonat etwa fünf Sekunden. **2×**, **3×** und Pause stehen in der unteren Leiste bereit. Dialoge und ein ausgeblendeter Browser-Tab pausieren die Simulation.
 
@@ -51,6 +53,8 @@ Bei **1×** dauert ein Spielmonat etwa fünf Sekunden. **2×**, **3×** und Paus
 Unter **Gelände** kannst du freie Flächen in **5-Meter-Schritten anheben oder absenken**. **Einebnen** übernimmt die Höhe des zuerst angeklickten Felds für die bearbeitete Fläche. Die Kosten betragen **35 € je Feld und 5 Meter Höhenänderung**. Unter dem Meeresspiegel entsteht Wasser; Aufschütten schafft Land. Bebaute Flächen müssen vor einer Höhenänderung geräumt werden.
 
 Öffentliche Anlagen sind **einzelne Gebäude mit zusammenhängender Baufläche**. Sie benötigen eine freie, trockene und ebene Grundfläche. Mit **R** drehst du Gebäude und Baufläche. Ein Abriss entfernt die gesamte Anlage.
+
+**Zufahrten und Höfe:** Alle 13 großen Anlagentypen unterstützen befestigte Zufahrten von einer angrenzenden Straße, auch bei gedrehten Gebäuden. Bei geeigneter Lage führt eine durchgehende Fahrspur mit Rampe auf den Vorplatz oder Parkplatz; sichtbarer Belag und Fahrzeugräder nutzen dieselbe Oberfläche. Straßen können vorne, seitlich oder hinten anschließen. Die Route bleibt auf dem vorhandenen Grundstück und verschiebt weder gespeicherte Gebäude noch Nachbarfelder. Lege die Straße direkt an die Grundstücksgrenze und achte auf einen überwindbaren Höhenunterschied. Industriegebäude erhalten einen kleineren Ladevorplatz; ist die Straße für eine nutzbare Rampe zu steil, gilt die Einfahrt nicht als befahrbar.
 
 | Anlage | Baufläche | Baukosten | Betrieb / Monat |
 | --- | ---: | ---: | ---: |
@@ -99,23 +103,30 @@ Das **Stadtziel** ist erreicht, wenn du **sechs Monate in Folge gleichzeitig** m
 | **M**, dann links ziehen | Kamera verschieben |
 | **W A S D / Pfeiltasten** | Kamera bewegen |
 | Mittlere Maustaste oder **Alt + links ziehen** | Kamera verschieben |
-| Rechts ziehen / **Q und E** | Kamera drehen |
+| Rechts ziehen ohne laufenden Entwurf / **Q und E** | Kamera drehen |
+| Rechtsklick während des Bauziehens | Entwurf abbrechen; Werkzeug behalten |
 | Mausrad | Zoomen |
 | **1 / 2 / 3 / 4 / 5** | Straße / Wohnen / Gewerbe / Industrie / Park |
-| **B / V / C** | Abreißen / Grundstück untersuchen / Bewohner greifen |
+| **B / V / C** | Abreißen / Grundstück auswählen und untersuchen / Bewohner greifen |
 | **R** | Großes Gebäude drehen |
-| **Leertaste** | Pause / mit 1× fortsetzen |
+| **Leertaste** bei fokussierter Spielwelt | Pause / mit 1× fortsetzen |
 | **G / N / H** | Raster / auf Tag oder Nacht schalten / Spielhilfe |
 | **L** | Stadtbeleuchtung ein- oder ausschalten |
 | **Cmd/Ctrl + S** | Speichern |
-| **Cmd/Ctrl + Z** | Rückgängig |
-| **Esc** | Fahrt beenden, Dialog schließen oder Auswahlwerkzeug aktivieren |
+| **Cmd/Ctrl + Z** | Letzte verfügbare Bau- oder Katastrophenaktion rückgängig machen |
+| **Esc** | Fahrt beenden, Dialog schließen oder Entwurf abbrechen; Bauwerkzeug behalten |
 
-Die **Weltkugel** zeigt die ganze Region, das **Fadenkreuz** bringt dich zur Innenstadt. Ein Klick auf die Minikarte verschiebt den Blick direkt an einen Ort. Unter **Stadtmenü → Kamera & Bewohner** findest du die Navigationshilfe.
+Die **Weltkugel** zeigt die ganze Region, das **Fadenkreuz** bringt dich zur Innenstadt. Ein Klick auf die Minikarte verschiebt den Blick direkt an einen Ort. Unter **Stadtmenü → Kamera & Bewohner** findest du die Navigationshilfe. Das **Stadtjournal** erreichst du immer über das Stadtmenü, auch in schmalen Laptop- und Mobilansichten.
+
+**Tastatur in Menüs:** Mit Tab und Umschalt+Tab wechselst du zwischen Dialogfeldern. Fokussierte Schaltflächen behalten ihre normale Enter-/Leertastenfunktion; Spielkürzel greifen nicht ein, während du Menüelemente bedienst oder Text eingibst. Nach dem Schließen erhält das öffnende Bedienelement nach Möglichkeit den Fokus zurück. Beim Aktualisieren desselben Dialogs bleiben Scrollposition und Fokus soweit möglich erhalten. Seitenleisten und Dialoginhalte lassen sich in kleineren Fenstern scrollen; NPC-Sprechblasen liegen hinter den Bedienfeldern.
 
 **Selbst fahren:** Wechsle mit **V** zur Auswahl, bewege die Maus über ein Fahrzeug und klicke auf das eingeblendete **Lenkrad**. Die Kamera folgt dem Wagen. **W/S** oder **↑/↓** beschleunigen, bremsen und fahren rückwärts; **A/D** oder **←/→** lenken. **Leertaste** ist die Handbremse: Bei Tempo und gleichzeitigem Lenken kann der Wagen seitlich driften. **Esc** beendet die Fahrt.
 
 Das Fahrprofil erlaubt **50 km/h auf Straßen in Bebauungsnähe**, **70 km/h auf freien Straßen außerhalb der Bebauung** und **25 km/h abseits der Straße**. Das aktuelle Tempo und die jeweilige Grenze erscheinen in der Fahranzeige. Limousinen, Taxis, Transporter und Lastwagen besitzen unterschiedliche Karosserien und Größen sowie runde Räder, Felgen, Spiegel und Leuchten.
+
+**Verkehr und Ampeln:** Fahrzeuge fahren auf der rechten Fahrbahnseite. An T-Einmündungen und Kreuzungen entstehen automatisch Ampeln; eng benachbarte Kreuzungen werden gemeinsam geregelt. Die sichtbaren roten, gelben und grünen Lichter folgen derselben Steuerung wie der KI-Verkehr, mit einer kurzen Rundum-Rotphase zwischen den Zufahrten. KI-Fahrzeuge halten bei Rot oder Gelb, warten vor belegten Kreuzungen und fahren erst hinein, wenn dahinter genügend Platz für das gesamte Fahrzeug frei ist. Bei unbeschilderten Konflikten gilt rechts vor links; enge Kurven und Einmündungen von Betriebshöfen lassen Fahrzeuge ebenfalls nur bei freier gemeinsamer Fahrfläche passieren. Autos stellen sich hinter wartendem Verkehr an und berücksichtigen Fahrzeuggrößen einschließlich LKWs. Auf stark belegten oder blockierten Straßen können weiterhin Staus entstehen.
+
+**Dienstfahrzeuge:** Polizeiautos, Feuerwehrfahrzeuge und Krankenwagen starten im Hof ihrer Wache beziehungsweise Klinik. Bei nutzbarer Verbindung fahren sie über die Zufahrt und Rampe, warten auf eine sichere Lücke und ordnen sich in den KI-Straßenverkehr ein. Über ihren Lenkradknopf kannst du sie wie andere Fahrzeuge auswählen und selbst fahren.
 
 Fahrzeuge kollidieren mit anderen Fahrzeugen und den sichtbaren Baukörpern. Freie Vorplätze und Zwischenräume sind befahrbar, soweit der Wagen hindurchpasst; Wasser und Kartengrenzen bleiben Hindernisse. Angefahrene Bewohner können stürzen oder bei schweren Treffern sterben. Die vorhandenen Regeln für Einwohnerverlust und Zeugen gelten auch dabei.
 
@@ -127,7 +138,9 @@ Katzen und Hunde tauchen vereinzelt in bewohnten Vierteln und Parks auf. In geei
 
 Ein kräftiger Wurf aktiviert die Ragdoll-Physik; tödliche Aufpralle hinterlassen einen Blutfleck an Boden oder Gebäude. Ein tödlicher Aufprall oder eine Entführung über den Kartenrand reduziert die Bevölkerung um **genau einen Einwohner**. Befinden sich andere Bewohner oder eine Polizeiwache in Beobachtungsreichweite, sinkt zusätzlich die Zufriedenheit um **2 Punkte**; ohne Zeugen entfällt dieser Abzug. Die Sichtprüfung ist eine vereinfachte Reichweitenregel. Sichtbare Bewohner und Fahrzeuge bilden eine begrenzte Auswahl des Stadtlebens ab, keine vollständige Simulation jedes Einwohners und Arbeitswegs.
 
-**Rückgängig** hält bis zu **zehn Bau- und Katastrophenaktionen** in der laufenden Sitzung vor. Mit dem nächsten Spielmonat oder einer anderen Zustandsänderung, etwa Steuern, Kredit, Wetter oder einem Einwohnerereignis, wird dieser Verlauf geleert. Pausiere zum Planen, wenn du mehrere Bauschritte zurücknehmen möchtest.
+**Bauten rückgängig machen:** Bis zu **zehn erfolgreiche Bauaktionen** bleiben in der laufenden Stadtsitzung verfügbar, auch über Spielmonate und Änderungen an Einstellungen, Steuern, Budgets oder Krediten hinweg. Rückgängig entfernt die jeweilige Bauänderung und erstattet deren tatsächliche Kosten. Kalender, monatliche Einnahmen und Ausgaben, aktuelle Einstellungen und das übrige Stadtwachstum werden dabei nicht zurückgesetzt. Eine rückgängig gemachte Zone wird auch dann entfernt, wenn sie inzwischen bebaut wurde; beim Zurücknehmen einer Leitung bleibt die sonstige Bebauung erhalten. Wurden betroffene Felder inzwischen unvereinbar verändert, wird Rückgängig abgewiesen, statt den neueren Zustand zu überschreiben. Das Abholen einer Auftragsbelohnung oder das Auslösen einer Katastrophe leert den Bauverlauf.
+
+**Katastrophen rückgängig machen:** Dafür gibt es einen getrennten Verlauf. Die zuletzt ausgelöste Katastrophe lässt sich nur vor dem nächsten Spielmonat oder einer anderen unvereinbaren Stadtänderung zurücknehmen. Pausiere vor dem Auslösen, wenn du Zeit zum Rückgängigmachen haben möchtest. Beide Verläufe gelten nur für die Sitzung und werden nicht im Spielstand gespeichert; Neuladen, Import oder eine neue Stadt beginnen mit leerem Verlauf.
 
 ## Wetter, Grafik und Katastrophen
 

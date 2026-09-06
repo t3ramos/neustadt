@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
 import { createCity } from '../src/simulation.ts';
+import { lanePose } from '../src/road-lanes.ts';
 import { createDrivingController, createVehicleMotion, drivingObstacle, drivingSurfaceHeight, getDrivingSpeedLimit, getVehicleDimensions, handBackToTraffic, setVehicleVelocity, stepVehicle, type DrivableCar, type DrivingHover, type DrivingInput, type VehicleMotion, type VehicleSweep, type VehicleCollision } from '../src/driving.ts';
 
 function city() {
@@ -79,9 +80,9 @@ test('a car enters the empty part of a facility lot and stops at its actual visi
   }
   const motion = createVehicleMotion(state, 0, -.5);
   run(state, motion, { throttle: 1, steer: 0, handbrake: false }, 6);
-  assert.ok(motion.z > 1.2 && motion.z < 1.31, `Car must cross the empty lot border but stop at the hospital wall: z=${motion.z}`);
+  assert.ok(motion.z > 1.5 && motion.z < 1.7, `Car must cross the empty lot border but stop at the hospital wall: z=${motion.z}`);
   assert.equal(motion.blocked, 'Gebäude im Weg');
-  assert.equal(drivingObstacle(state, 0, 1.5, 0), 'Gebäude im Weg');
+  assert.equal(drivingObstacle(state, 0, 1.8, 0), 'Gebäude im Weg');
   const zoned = state.tiles[20 * state.size + 20]; zoned.kind = 'residential'; zoned.level = 0;
   assert.equal(drivingObstacle(state, .5, .5, 0), undefined);
   zoned.level = 1;
@@ -365,4 +366,23 @@ test('hitting an actual building emits one world crash with pre-impact speed and
   assert.ok(hits[0].point.z > vehicle.model.position.z);
   assert.equal(system.getStatus().collisionCount, 1); assert.equal(system.getStatus().blocked, 'Gebäude im Weg');
   system.dispose();
+});
+
+
+test('traffic handback preserves a curved lane and its real incoming neighbor in every direction', () => {
+  const directions=[{x:0,z:1},{x:1,z:0},{x:0,z:-1},{x:-1,z:0}];
+  for(let turn=0;turn<4;turn++)for(const progress of [.15,.43,.82]) {
+    const state=city(),vehicle=car(state),incoming=directions[turn],outgoing=directions[(turn+1)%4];
+    for(const tile of state.tiles)tile.kind='empty';
+    const from={x:20,z:20},previous={x:from.x-incoming.x,z:from.z-incoming.z},to={x:from.x+outgoing.x,z:from.z+outgoing.z};
+    for(const point of [previous,from,to])state.tiles[point.z*state.size+point.x].kind='road';
+    const pose=lanePose(previous,from,to,progress),x=pose.x-state.size/2,z=pose.z-state.size/2;
+    vehicle.model.position.set(x,drivingSurfaceHeight(state,x,z),z);vehicle.model.rotation.y=pose.yaw;
+    assert.equal(handBackToTraffic(state,vehicle),true);
+    assert.deepEqual(vehicle.previous,previous);assert.deepEqual(vehicle.from,from);assert.deepEqual(vehicle.to,to);
+    const resumed=lanePose(vehicle.previous!,vehicle.from,vehicle.to,vehicle.progress);
+    assert.ok(Math.hypot(resumed.x-state.size/2-x,resumed.z-state.size/2-z)<.0001,'Handback must keep the actual curved location');
+    assert.ok(Math.abs(vehicle.model.position.x-resumed.x+state.size/2)<1e-10);
+    assert.ok(Math.abs(vehicle.model.position.z-resumed.z+state.size/2)<1e-10);
+  }
 });

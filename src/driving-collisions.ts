@@ -3,6 +3,7 @@ import { createTileModel } from './models';
 import { sampleGroundHeight } from './terrain-graphics';
 import { getRoadStreetlightFixture } from './streetlights';
 import type { CityState, Tile } from './types';
+import { facilityAccessSignature } from './facility-access';
 
 export interface DrivingCollisionDimensions { halfWidth: number; halfLength: number; height: number; }
 export interface DrivingCollisionWorld {
@@ -84,7 +85,7 @@ export function extractDrivingCollisionShapes(root: THREE.Object3D, groundY = 0)
   root.updateMatrixWorld(true);
   const shapes: DrivingCollisionShape[] = [];
   root.traverseVisible(object => {
-    if (!(object instanceof THREE.Mesh) || object.userData.buildingWindowLight) return;
+    if (!(object instanceof THREE.Mesh) || object.userData.buildingWindowLight || object.userData.drivingSurface) return;
     let parent: THREE.Object3D | null = object, isProp = false;
     while (parent && parent !== root.parent) { if (parent.userData.vehicleForward || parent.userData.drivingObstacle) isProp = true; parent = parent.parent; }
     const matrix = object.matrixWorld, e = matrix.elements;
@@ -187,7 +188,7 @@ export function createDrivingCollisionWorld(initialState: CityState): DrivingCol
   const cache = new Map<number, { signature: string; shapes: DrivingCollisionShape[]; kind: Tile['kind'] }>();
   function entry(tile: Tile) {
     const index = tile.z * state.size + tile.x;
-    const signature = [tile.kind, tile.level, tile.variation, tile.elevation, tile.rotation, tile.anchor, tile.kind === 'tree' || tile.kind === 'road' ? state.revision : 0].join(':');
+    const signature = [tile.kind, tile.level, tile.variation, tile.elevation, tile.rotation, tile.anchor, tile.kind === 'tree' || tile.kind === 'road' ? state.revision : facilityAccessSignature(state,tile)].join(':');
     let result = cache.get(index);
     if (result?.signature === signature) return result;
     const x = tile.x - state.size / 2 + .5, z = tile.z - state.size / 2 + .5;

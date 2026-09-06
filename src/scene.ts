@@ -5,14 +5,20 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { createTileModel, setModelNightBlend, setModelWet, getModelFootprint, createFacilityActors, updateFacilityActors } from './models';
+import { createTileModel, setModelNightBlend, setModelWet, getModelFootprint, createFacilityActors, updateFacilityActors, createFacilityServiceVehicle } from './models';
 import { previewBuild, getFootprint, isBuildingAnchor } from './simulation';
 import { createWeatherEffects } from './weather-graphics';
 import { createFireEffects } from './fire-effects';
 import { createCitizens } from './citizens';
-import { createDrivingController, getVehicleDimensions, type VehicleCollision } from './driving';
+import { createDrivingController, getVehicleDimensions, drivingSurfaceHeight, type VehicleCollision } from './driving';
 import { findVehicleContact, type VehicleContactBody } from './vehicle-contacts';
 import { createDetailedCar, type VehicleKind } from './vehicle-model';
+import { lanePose } from './road-lanes';
+import { buildRoadNetwork, roadPointKey, sameRoadPoint, planExternalMovement, type JunctionMovement } from './traffic-network';
+import { createTrafficController, type TrafficVehicle } from './traffic-controller';
+import { advanceTrafficRoute, chooseTrafficExit, prepareTrafficRoute, type TrafficRouteState } from './traffic-flow';
+import { createTrafficSignals } from './traffic-signals';
+import { facilityAccessSignature, listFacilityServiceRoutes, type FacilityServiceRoute } from './facility-access';
 import { createAnimalSystem } from './animals';
 import { createStreetlights, removeLegacyStreetlight } from './streetlights';
 import { applyStableShadowFiltering, createCityLighting } from './lighting';
@@ -21,7 +27,8 @@ import { getPowerLayout, powerLayoutSignature } from './power-layout';
 import { createPowerGridModel } from './power-model';
 import { createRegionContext, getRegionMargin } from './region-context';
 import { buildTerrainChunk, buildTerrainSkirt, createTerrainMaterials, terrainChunkSignature, sampleGroundHeight } from './terrain-graphics';
-import type { CityState, CitySceneApi, SceneCallbacks, Point, Tool, Overlay, Tile, Weather, BuildOptions } from './types';
+import { brushFootprint, ConstructionStroke, PointerInteraction, ZONE_TOOLS, LINE_TOOLS, FACILITY_TOOLS, SINGLE_TILE_TOOLS } from './construction-gesture';
+import type { CityState, CitySceneApi, SceneCallbacks, Point, Tool, Overlay, Tile, Weather, BuildOptions, PreviewInfo } from './types';
 import { tr } from './i18n';
 
 type GraphicsQuality='performance'|'balanced'|'ultra';
@@ -31,11 +38,16 @@ export function buildingLightIntensity(nightBlend:number,enabled:boolean):number
   return enabled ? .18 + .82 * THREE.MathUtils.clamp(Number.isFinite(nightBlend)?nightBlend:0,0,1) : 0;
 }
 
+/** Suspension support for an autonomous service vehicle, using the same wheel
+ * contacts and visible driving surface as the player-controlled vehicle. */
+export function serviceVehicleSupportPose(sampleHeight:(x:number,z:number)=>number,x:number,z:number,yaw:number,wheelBase:number,width:number):{y:number;pitch:number;roll:number} {
+  const halfLength=wheelBase/2,halfWidth=width*.38,fx=Math.sin(yaw),fz=Math.cos(yaw),rx=Math.cos(yaw),rz=-Math.sin(yaw);
+  const front=sampleHeight(x+fx*halfLength,z+fz*halfLength),back=sampleHeight(x-fx*halfLength,z-fz*halfLength);
+  const right=sampleHeight(x+rx*halfWidth,z+rz*halfWidth),left=sampleHeight(x-rx*halfWidth,z-rz*halfWidth);
+  return {y:Math.max(sampleHeight(x,z),(front+back)/2,(right+left)/2),pitch:-Math.atan2(front-back,wheelBase),roll:Math.atan2(right-left,halfWidth*2)};
+}
+
 const CHUNK = 16;
-const SINGLE_TILE_TOOLS = new Set<Tool>(['inspect', 'pan', 'citizen', 'road', 'rail', 'pipe', 'powerline']);
-const TERRAIN_TOOLS = new Set<Tool>(['raise', 'lower', 'level']);
-const LINE_TOOLS = new Set<Tool>(['road', 'rail', 'pipe', 'powerline']);
-const FACILITY_TOOLS = new Set<Tool>(['power','waterpump','police','fire','hospital','school','stadium','airport','seaport','wind','solar','university','recycling']);
 const TOOL_COLORS: Partial<Record<Tool, number>> = {
   residential: 0x8dcc7a, commercial: 0x68bde4, industrial: 0xe8c66d,
   road: 0xf3ead6, rail: 0xd6c7b5, bulldoze: 0xed8373, waterpump: 0x73d3df,
@@ -88,7 +100,7 @@ function disposeGroup(group: THREE.Object3D) {
   group.removeFromParent();
 }
 
-interface Car {
+interface Car extends TrafficRouteState {
   model: THREE.Group;
   from: Point;
   to: Point;
@@ -96,6 +108,8 @@ interface Car {
   progress: number;
   speed: number;
   turn: number;
+  wasControlled?:boolean;
+  service?:{id:string;route:FacilityServiceRoute;index:number;departed:boolean;wait:number;merge?:JunctionMovement};
 }
 
 export function createCityScene(container: HTMLElement, initialState: CityState, callbacks: SceneCallbacks): CitySceneApi {
@@ -131,8 +145,9 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   let selected: Point | null = null;
   let dragging = false;
   let spacePan = false;
-  let lastPainted: Point | null = null;
-  const stroke = new Map<string, Point>();
+  let stroke: ConstructionStroke | null = null;
+  const interaction = new PointerInteraction();
+  let suppressedPointer: number | null = null;
   const size = state.size;
   const half = size / 2;
   const scene = new THREE.Scene();
@@ -321,6 +336,10 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   const fireEffects=createFireEffects(state);
   live.add(fireEffects.group);
   const cars: Car[] = [];
+  let roadNetwork=buildRoadNetwork(state);
+  const trafficController=createTrafficController(roadNetwork);
+  const trafficSignals=createTrafficSignals(state,roadNetwork.junctions);
+  live.add(trafficSignals.group);
   const collisions:VehicleCollision[]=[];
   let trafficSeed=state.seed;
   let fleetSequence=0;
@@ -328,7 +347,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   const driving=createDrivingController(state,()=>cars,{
     onHover:info=>callbacks.onVehicleHover?.(info),
     onStatus:info=>{
-      if(!info.active&&!disposed){controls.enabled=!dragging&&!citizens.holding;citizens.setEnabled(tool==='citizen');lighting.setDriving(false);lighting.invalidateReflections();}
+      if(!info.active&&!disposed){controls.enabled=!dragging&&!citizens.holding&&suppressedPointer===null;citizens.setEnabled(tool==='citizen');lighting.setDriving(false);lighting.invalidateReflections();}
       callbacks.onDriveStatus?.(info);
     },
     onVehicleSweep:event=>citizens.sweepVehicleImpact(event),
@@ -388,8 +407,9 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
       for (let x = cx; x < Math.min(cx + CHUNK, size); x++) {
         const tile = tileAt(x, z)!;
         signature += `${tile.kind}:${tile.level}:${tile.variation}:${tile.elevation}:${tile.anchor}:${tile.rotation}:${tile.hasPipe}:${tile.hasPowerLine};`;
+        if(isBuildingAnchor(state,tile))signature+=facilityAccessSignature(state,tile);
         if (tile.kind === 'road' || tile.kind === 'rail') {
-          for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){const neighbor=tileAt(x+dx,z+dz);signature+=`${neighbor?.kind}:${neighbor?.elevation};`;}
+          for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){const neighbor=tileAt(x+dx,z+dz);signature+=`${neighbor?.kind}:${neighbor?.elevation};`;if(neighbor)signature+=facilityAccessSignature(state,neighbor);}
         }
       }
     }
@@ -558,33 +578,85 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
 
   function updateRoads() {
     const nextRoads=state.tiles.filter(tile=>tile.kind==='road').map(tile=>({x:tile.x,z:tile.z}));
-    const nextKey=`${state.seed}:`+nextRoads.map(tile=>`${tile.x},${tile.z}`).join(';');
+    const nextKey=`${state.seed}:`+nextRoads.map(tile=>`${tile.x},${tile.z},${tileAt(tile.x,tile.z)?.elevation}`).join(';')+'|'+state.tiles.filter(t=>['fire','hospital','police'].includes(t.kind)).map(t=>`${t.x},${t.z},${t.kind}`).join(';');
     if(roadKey===nextKey)return;
-    roadKey=nextKey;roadCells=nextRoads.filter(point=>neighbors(point).length>0);
-    if(trafficSeed!==state.seed){driving.exit();for(const car of cars)car.model.removeFromParent();cars.length=0;trafficSeed=state.seed;collisions.length=0;}
-    // Road edits do not reset surviving cars or erase collision/recovery motion.
+    roadKey=nextKey;roadNetwork=buildRoadNetwork(state);trafficController.rebuild(roadNetwork);
+    trafficSignals.update(state,roadNetwork.junctions);trafficSignals.setSignals(trafficController.signalStates());
+    roadCells=nextRoads.filter(point=>neighbors(point).length>0&&!roadNetwork.junctionAt.has(roadPointKey(point)));
+    if(trafficSeed!==state.seed){driving.exit();for(const car of cars){trafficController.cancel(car.model.id);car.model.removeFromParent();}cars.length=0;trafficSeed=state.seed;collisions.length=0;}
+    // A surviving vehicle keeps its physical pose; edited routes are repaired at the next boundary.
     for(let i=cars.length-1;i>=0;i--){
-      const car=cars[i];if(driving.controlsCar(car))continue;
-      if(tileAt(car.from.x,car.from.z)?.kind!=='road'||tileAt(car.to.x,car.to.z)?.kind!=='road'){car.model.removeFromParent();cars.splice(i,1);}
+      const car=cars[i];if(driving.controlsCar(car)||car.service&&!car.service.departed)continue;
+      if(tileAt(car.from.x,car.from.z)?.kind!=='road'||tileAt(car.to.x,car.to.z)?.kind!=='road'){trafficController.cancel(car.model.id);car.model.removeFromParent();cars.splice(i,1);continue;}
+      if(car.itinerary?.some(p=>!roadNetwork.roads.has(roadPointKey(p)))||car.movement&&roadNetwork.approaches.get(car.movement.approachId)?.junctionId!==car.movement.junctionId){car.itinerary=[];car.movement=undefined;trafficController.cancel(car.model.id);}
     }
-    const count=Math.min(40,Math.floor(roadCells.length/5));
-    while(cars.length>count){let index=cars.length-1;while(index>=0&&driving.controlsCar(cars[index]))index--;if(index<0)break;cars[index].model.removeFromParent();cars.splice(index,1);}
+    const count=Math.min(40,Math.floor(nextRoads.length/5),roadCells.length);
+    while(cars.filter(car=>!car.service).length>count){let index=cars.length-1;while(index>=0&&(driving.controlsCar(cars[index])||cars[index].service))index--;if(index<0)break;trafficController.cancel(cars[index].model.id);cars[index].model.removeFromParent();cars.splice(index,1);}
     const colors=[0xe5b34d,0xc4d2cd,0x537c9b,0xbc6e58,0x698c7c,0xeee3c5,0x6885ad,0x994b49];
     const kinds:VehicleKind[]=['sedan','taxi','sedan','van','sedan','truck','sedan','van'];
-    const used=new Set(cars.map(car=>`${car.from.x}:${car.from.z}`));
-    while(cars.length<count){
+    const used=new Set(cars.map(car=>roadPointKey(car.from)));
+    let attempts=0;
+    while(cars.filter(car=>!car.service).length<count&&attempts++<roadCells.length*2){
       const serial=fleetSequence++,index=Math.floor(noise(serial,12,state.seed)*roadCells.length);
       let from=roadCells[index];
-      for(let step=0;step<roadCells.length&&used.has(`${from.x}:${from.z}`);step++)from=roadCells[(index+step+1)%roadCells.length];
-      used.add(`${from.x}:${from.z}`);
-      const choices=neighbors(from),to=choices[serial%choices.length],kind=kinds[serial%kinds.length];
+      for(let step=0;step<roadCells.length&&used.has(roadPointKey(from));step++)from=roadCells[(index+step+1)%roadCells.length];
+      if(used.has(roadPointKey(from)))break;used.add(roadPointKey(from));
+      const choices=neighbors(from),to=choices[serial%choices.length],previous=choices.find(p=>!sameRoadPoint(p,to))??to,kind=kinds[serial%kinds.length];
       const model=createDetailedCar(kind==='taxi'?0xeac45b:colors[serial%colors.length],kind);
       model.userData.vehicleLabel=`${model.userData.vehicleLabel??kind} ${String(serial+1).padStart(2,'0')}`;
-      const dx=to.x-from.x,dz=to.z-from.z,wx=from.x-half+.5-dz*.13,wz=from.z-half+.5+dx*.13;
-      model.position.set(wx,sampleRoadHeight(state,wx,wz)+.057,wz);model.rotation.set(0,Math.atan2(dx,dz),0,'YXZ');
-      live.add(model);
-      cars.push({model,from,to,previous:from,progress:0,speed:(kind==='truck'?.25:.34)+noise(serial,8)*.29,turn:serial});
+      const pose=lanePose(previous,from,to,.5),wx=pose.x-half,wz=pose.z-half;
+      model.position.set(wx,sampleRoadHeight(state,wx,wz)+.057,wz);model.rotation.set(0,pose.yaw,0,'YXZ');
+      const car:Car={model,from,to,previous,progress:.5,speed:(kind==='truck'?.25:.34)+noise(serial,8)*.29,turn:serial};
+      if(cars.some(other=>!!findVehicleContact(carBody(car),carBody(other))))continue;
+      live.add(model);cars.push(car);prepareTrafficRoute(car,roadNetwork,trafficController,model.id);
     }
+  }
+
+  function updateServiceFleet(){
+    const routes=listFacilityServiceRoutes(state),active=new Set(routes.map(route=>route.id));
+    for(let i=cars.length-1;i>=0;i--){const car=cars[i];if(car.service&&!active.has(car.service.id)&&!driving.controlsCar(car)){trafficController.cancel(car.model.id);car.model.removeFromParent();cars.splice(i,1);}}
+    for(const route of routes){
+      const existing=cars.find(car=>car.service?.id===route.id);
+      if(existing){
+        const service=existing.service!;
+        if(!service.departed&&!driving.controlsCar(existing)){
+          // Reconnect a changed driveway only at the current physical position.
+          let nearest=0,best=Infinity;for(let i=0;i<route.points.length;i++){const p=route.points[i],d=Math.hypot(p.x-existing.model.position.x,p.z-existing.model.position.z);if(d<best){nearest=i;best=d;}}
+          service.route=best<.12?route:{...route,connected:false};service.merge=undefined;service.index=Math.min(nearest+1,route.points.length-1);
+        }
+        continue;
+      }
+      const model=createFacilityServiceVehicle(route.kind),serial=fleetSequence++;
+      const dimensions=getVehicleDimensions(model),support=serviceVehicleSupportPose((x,z)=>drivingSurfaceHeight(state,x,z),route.spawn.x,route.spawn.z,route.yaw,dimensions.wheelBase,dimensions.width);
+      model.position.set(route.spawn.x,support.y,route.spawn.z);model.rotation.set(support.pitch,route.yaw,support.roll,'YXZ');live.add(model);
+      const from=route.road??{x:Math.floor(route.spawn.x+half),z:Math.floor(route.spawn.z+half)};
+      cars.push({model,from,to:route.to??from,previous:route.previous??from,progress:0,speed:route.kind==='firetruck'?.40:.47,turn:serial,service:{id:route.id,route,index:1,departed:false,wait:2+serial%6}});
+    }
+  }
+
+  function advanceServiceCar(car:Car,step:number,occupants:TrafficVehicle[]):boolean {
+    const service=car.service;if(!service||service.departed)return false;
+    if(service.wait>0){service.wait=Math.max(0,service.wait-step);return true;}
+    const route=service.route;if(!route.connected||!route.road||!route.to||!route.previous){car.model.userData.trafficWaiting=true;car.model.userData.trafficWaitReason='access';return true;}
+    const before=car.model.position.clone(),own=occupants.find(v=>v.id===car.model.id)!;
+    const merge=roadNetwork.junctionAt.get(roadPointKey(route.road)),end=route.points[route.points.length-1];
+    if(merge&&Math.hypot(end.x-before.x,end.z-before.z)<own.halfLength+.38){
+      service.merge??=planExternalMovement(roadNetwork,route.road,route.to,car.model.id)??undefined;
+      if(!service.merge||!trafficController.reserveExternal(car.model.id,merge.id,service.merge)){car.model.userData.trafficWaiting=true;car.model.userData.trafficWaitReason='junction';return true;}
+    }
+    let distance=car.speed*step,index=service.index,point={x:before.x,y:before.y,z:before.z};
+    while(index<route.points.length&&distance>0){const target=route.points[index],length=Math.hypot(target.x-point.x,target.z-point.z);if(length<1e-8){index++;continue;}const fraction=Math.min(1,distance/length);point={x:point.x+(target.x-point.x)*fraction,y:point.y+(target.y-point.y)*fraction,z:point.z+(target.z-point.z)*fraction};distance-=length*fraction;if(fraction===1)index++;}
+    const heading=route.points[Math.min(index+3,route.points.length-1)]??point;
+    const yaw=Math.hypot(heading.x-point.x,heading.z-point.z)>.0001?Math.atan2(heading.x-point.x,heading.z-point.z):lanePose(route.previous,route.road,route.to,0).yaw;
+    const dimensions=getVehicleDimensions(car.model),support=serviceVehicleSupportPose((x,z)=>drivingSurfaceHeight(state,x,z),point.x,point.z,yaw,dimensions.wheelBase,dimensions.width);
+    const desired=carBody(car,point.x,support.y,point.z,yaw);
+    if(cars.some(other=>other!==car&&!!findVehicleContact(desired,carBody(other)))){car.model.userData.trafficWaiting=true;car.model.userData.trafficWaitReason='vehicle';return true;}
+    const previousYaw=car.model.rotation.y;
+    service.index=index;car.model.position.set(point.x,support.y,point.z);car.model.rotation.set(support.pitch,yaw,support.roll,'YXZ');car.model.userData.trafficWaiting=false;car.model.userData.trafficWaitReason=null;
+    citizens.sweepVehicleImpact({previous:before,current:car.model.position,previousYaw,yaw,width:dimensions.width,length:dimensions.length,height:dimensions.height,velocity:car.model.position.clone().sub(before).multiplyScalar(1/step),vehicleId:car.model.id,trafficOnly:true});
+    Object.assign(own,{x:point.x+half,z:point.z+half,y:support.y,yaw});car.travelled=(car.travelled??0)+before.distanceTo(car.model.position);
+    if(index>=route.points.length){service.departed=true;car.from=route.road;car.to=route.to;car.previous=route.previous;car.progress=0;car.itinerary=service.merge?.path.slice(2)??[];car.movement=undefined;prepareTrafficRoute(car,roadNetwork,trafficController,car.model.id);}
+    return true;
   }
 
   function carBody(car:Car,x=car.model.position.x,y=car.model.position.y,z=car.model.position.z,yaw=car.model.rotation.y):VehicleContactBody {
@@ -631,37 +703,34 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   }
 
   function animateLive(dt: number) {
-    for (const car of cars) {
-      if(driving.controlsCar(car))continue;
-      const previousPosition=car.model.position.clone(),previousYaw=car.model.rotation.y;
-      const routeBefore={from:car.from,to:car.to,previous:car.previous,progress:car.progress,turn:car.turn};
-      car.progress += dt * car.speed * (state.speed === 0 ? 0 : 1);
-      if (car.progress >= 1) {
-        car.progress %= 1;
-        car.previous = car.from;
-        car.from = car.to;
-        const all = neighbors(car.from);
-        const forward = all.filter(point => point.x !== car.previous.x || point.z !== car.previous.z);
-        const choices = forward.length ? forward : all;
-        car.to = choices[Math.floor(noise(++car.turn, car.from.x + car.from.z) * choices.length)] ?? car.previous;
-      }
-      const dx = car.to.x - car.from.x, dz = car.to.z - car.from.z;
-      const wx=car.from.x+dx*car.progress-half+.5-dz*.13,wz=car.from.z+dz*car.progress-half+.5+dx*.13;
-      const y=sampleRoadHeight(state,wx,wz)+.057,yaw=Math.atan2(dx,dz),desired=carBody(car,wx,y,wz,yaw);
-      const blocked=cars.some(other=>{
-        if(other===car||other.model.position.distanceToSquared(previousPosition)>2.25)return false;
-        const contact=findVehicleContact(desired,carBody(other));if(!contact)return false;
-        const before=findVehicleContact(carBody(car),carBody(other));return !before||contact.penetration>before.penetration+.00001;
-      });
-      if(blocked){Object.assign(car,routeBefore);car.model.userData.trafficWaiting=true;continue;}
-      car.model.userData.trafficWaiting=false;
-      car.model.position.set(wx,y,wz);
-      const forwardSlope=(sampleRoadHeight(state,wx+dx*.12,wz+dz*.12)-sampleRoadHeight(state,wx-dx*.12,wz-dz*.12))/.24;
-      const rightSlope=(sampleRoadHeight(state,wx+dz*.12,wz-dx*.12)-sampleRoadHeight(state,wx-dz*.12,wz+dx*.12))/.24;
-      car.model.rotation.set(-Math.atan(forwardSlope),yaw,Math.atan(rightSlope),'YXZ');
-      const dimensions=getVehicleDimensions(car.model),velocity=car.model.position.clone().sub(previousPosition).multiplyScalar(dt>0?1/dt:0);
-      citizens.sweepVehicleImpact({previous:previousPosition,current:car.model.position,previousYaw,yaw,width:dimensions.width,length:dimensions.length,height:dimensions.height,velocity,vehicleId:car.model.id,trafficOnly:true});
+    const simDt=dt*state.speed,steps=Math.max(1,Math.ceil(simDt/.025)),step=simDt/steps;
+    for(const car of cars){
+      const controlled=driving.controlsCar(car);
+      if(controlled||car.wasControlled){trafficController.cancel(car.model.id);car.movement=undefined;car.itinerary=[];}
+      if(controlled&&car.service)car.service.departed=true;
+      car.wasControlled=controlled;
     }
+    for(let substep=0;substep<steps;substep++){
+      const occupants:TrafficVehicle[]=cars.map(car=>{const b=carBody(car);return {id:car.model.id,x:b.x+half,z:b.z+half,y:b.y,yaw:b.yaw,halfWidth:b.halfWidth,halfLength:b.halfLength,controlled:driving.controlsCar(car)};});
+      trafficController.update(step,occupants);
+      // Existing reservations move first; waiting cars never win space by array accident.
+      const ordered=[...cars].sort((a,b)=>Number(trafficController.hasReservation(b.model.id))-Number(trafficController.hasReservation(a.model.id)));
+      for(const car of ordered){
+        if(driving.controlsCar(car)||step<=0)continue;
+        if(advanceServiceCar(car,step,occupants))continue;
+        const previousPosition=car.model.position.clone(),previousYaw=car.model.rotation.y;
+        const pose=advanceTrafficRoute(car,car.model.id,car.speed,step,roadNetwork,trafficController,occupants,(x,z)=>sampleRoadHeight(state,x-half,z-half)+.057);
+        const wx=pose.x-half,wz=pose.z-half,y=sampleRoadHeight(state,wx,wz)+.057,dx=pose.tangentX,dz=pose.tangentZ;
+        car.model.userData.trafficWaiting=!!car.waiting;car.model.userData.trafficWaitReason=car.waiting;
+        car.model.position.set(wx,y,wz);
+        const forwardSlope=(sampleRoadHeight(state,wx+dx*.12,wz+dz*.12)-sampleRoadHeight(state,wx-dx*.12,wz-dz*.12))/.24;
+        const rightSlope=(sampleRoadHeight(state,wx+dz*.12,wz-dx*.12)-sampleRoadHeight(state,wx-dz*.12,wz+dx*.12))/.24;
+        car.model.rotation.set(-Math.atan(forwardSlope),pose.yaw,Math.atan(rightSlope),'YXZ');
+        const dimensions=getVehicleDimensions(car.model),velocity=car.model.position.clone().sub(previousPosition).multiplyScalar(1/step);
+        citizens.sweepVehicleImpact({previous:previousPosition,current:car.model.position,previousYaw,yaw:pose.yaw,width:dimensions.width,length:dimensions.length,height:dimensions.height,velocity,vehicleId:car.model.id,trafficOnly:true});
+      }
+    }
+    trafficSignals.setSignals(trafficController.signalStates());
     for (const boat of boats) {
       boat.group.position.set(boat.x + Math.sin(elapsed * 0.06 + boat.phase) * 0.22, Math.sin(elapsed * 1.1 + boat.phase) * 0.012, boat.z + Math.cos(elapsed * 0.06 + boat.phase) * 0.22);
       boat.group.rotation.z = Math.sin(elapsed * 0.7 + boat.phase) * 0.035;
@@ -692,28 +761,25 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   }
 
   function footprint(point:Point):Point[] {
-    if(FACILITY_TOOLS.has(tool)) return [point];
-    const points:Point[]=[];
-    const width=SINGLE_TILE_TOOLS.has(tool)?1:brush;
-    const offset=Math.floor((width-1)/2);
-    for(let dz=0;dz<width;dz++) for(let dx=0;dx<width;dx++) {
-      const x=point.x-offset+dx,z=point.z-offset+dz;
-      if(x>=0&&z>=0&&x<size&&z<size) points.push({x,z});
-    }
-    return points;
+    return brushFootprint(point,tool,brush,size);
   }
   function buildOptions():BuildOptions { return {rotation,targetElevation:targetElevation??(tool==='level'&&currentHover?tileAt(currentHover.x,currentHover.z)?.elevation:undefined)}; }
-  function refreshGhost() {
-    if(tool==='citizen'||driving.active) {
+  let lastGhostKey = '';
+  let lastGhostStroke: ConstructionStroke | null = null;
+  let lastPreview: PreviewInfo | null = null;
+  function refreshGhost(force=false) {
+    if(tool==='citizen'||driving.active||modalOpen()||!currentHover) {
+      lastGhostKey='';lastPreview=null;
       ghost.count=0;ghostEdges.visible=false;cursor.visible=false;ghostVolume.visible=false;
       callbacks.onPreview?.(null);return;
     }
-    ghostEdges.visible=true;
-    const input=new Map(stroke);
-    if(currentHover && tool!=='inspect'&&tool!=='pan') {
-      if(!FACILITY_TOOLS.has(tool)||!input.size) for(const point of footprint(currentHover)) input.set(`${point.x}:${point.z}`,point);
+    const key=`${state.revision}:${state.money}:${tool}:${brush}:${rotation}:${targetElevation}:${currentHover.x}:${currentHover.z}:${stroke?.revision}`;
+    if(!force&&key===lastGhostKey&&stroke===lastGhostStroke){
+      callbacks.onPreview?.(lastPreview?{...lastPreview,screenX:pointerScreen.x,screenY:pointerScreen.y}:null);return;
     }
-    const points=[...input.values()];
+    lastGhostKey=key;lastGhostStroke=stroke;
+    ghostEdges.visible=true;
+    const points=stroke?.points??(tool!=='inspect'&&tool!=='pan'?footprint(currentHover):[]);
     const result=points.length?previewBuild(state,points,tool,buildOptions()):null;
     const valid=new Map((result?.valid??[]).map(p=>[`${p.x}:${p.z}`,p]));
     const invalid=new Map((result?.invalid??[]).map(p=>[`${p.x}:${p.z}`,p]));
@@ -762,39 +828,65 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
       cursor.scale.set(w,1,d);cursor.position.set(anchor.x-half+w/2-offset,ground+.13,anchor.z-half+d/2-offset);
       cursorMaterial.color.set((result?.invalid.length||result&&result.cost>state.money)?0xff9c91:0xb3fff0);
       if(fixed&&result) {ghostVolume.visible=true;ghostVolume.scale.set(w-.08,.35,d-.08);ghostVolume.position.copy(cursor.position);ghostVolume.position.y+=.12;(ghostVolume.material as THREE.MeshBasicMaterial).color.copy(cursorMaterial.color);}
-      callbacks.onPreview?.(result?{...result,screenX:pointerScreen.x,screenY:pointerScreen.y,tool,footprint:fixed?[w,d]:undefined,elevation:targetElevation??tileAt(anchor.x,anchor.z)?.elevation}:null);
-    } else callbacks.onPreview?.(null);
+      lastPreview=result?{...result,screenX:pointerScreen.x,screenY:pointerScreen.y,tool,footprint:fixed?[w,d]:undefined,area:ZONE_TOOLS.has(tool)?stroke?.area??[1,1]:undefined,elevation:targetElevation??tileAt(anchor.x,anchor.z)?.elevation}:null;
+      callbacks.onPreview?.(lastPreview);
+    } else {lastPreview=null;callbacks.onPreview?.(null);}
   }
 
-  function addStroke(point: Point) {
-    if(FACILITY_TOOLS.has(tool)&&stroke.size)return;
-    for (const item of footprint(point)) stroke.set(`${item.x}:${item.z}`, item);
+  function modalOpen(): boolean {
+    return !!document.querySelector('dialog[open],[role="dialog"][aria-modal="true"]');
   }
 
-  function interpolateStroke(from: Point, to: Point) {
-    const dx = to.x - from.x, dz = to.z - from.z;
-    // Transport strokes use orthogonal steps so every segment is traversable.
-    if (LINE_TOOLS.has(tool)) {
-      let x = from.x, z = from.z;
-      let ix = 0, iz = 0;
-      const ax = Math.abs(dx), az = Math.abs(dz);
-      while (ix < ax || iz < az) {
-        if (ix < ax && (iz >= az || (ix + 0.5) / Math.max(ax, 1) <= (iz + 0.5) / Math.max(az, 1))) { x += Math.sign(dx); ix++; }
-        else { z += Math.sign(dz); iz++; }
-        addStroke({ x, z });
-      }
-    } else {
-      const steps = Math.max(Math.abs(dx), Math.abs(dz));
-      for (let step = 1; step <= steps; step++) addStroke({ x: Math.round(from.x + dx * step / steps), z: Math.round(from.z + dz * step / steps) });
-    }
+  function overCanvas(event: MouseEvent): boolean {
+    const rect=renderer.domElement.getBoundingClientRect();
+    return event.clientX>=rect.left&&event.clientY>=rect.top&&event.clientX<rect.right&&event.clientY<rect.bottom
+      &&document.elementFromPoint(event.clientX,event.clientY)===renderer.domElement;
+  }
+
+  function releaseCapture(pointerId: number | null): void {
+    if(pointerId!==null&&renderer.domElement.hasPointerCapture(pointerId)) renderer.domElement.releasePointerCapture(pointerId);
+  }
+
+  function clearInteraction(): void {
+    dragging=false;stroke=null;targetElevation=undefined;
+    controls.enabled=!driving.active&&suppressedPointer===null;
+  }
+
+  function cancelInteraction(): boolean {
+    const pointerId=interaction.cancel(),active=pointerId!==null||dragging||citizens.holding;
+    citizens.cancel();clearInteraction();releaseCapture(pointerId);
+    currentHover=null;renderer.domElement.style.cursor=tool==='pan'?'grab':tool==='inspect'||tool==='citizen'?'default':'crosshair';
+    callbacks.onHover(null);refreshGhost();
+    return active;
+  }
+
+  function suppressCanceledPointer(event: PointerEvent): boolean {
+    if(suppressedPointer!==event.pointerId)return false;
+    event.preventDefault();event.stopImmediatePropagation();
+    if(event.buttons===0){suppressedPointer=null;controls.enabled=!driving.active;}
+    return true;
+  }
+
+  function cancelFromRightButton(event: MouseEvent): void {
+    if(!interaction.active)return;
+    suppressedPointer=interaction.pointerId;
+    cancelInteraction();event.preventDefault();event.stopImmediatePropagation();
   }
 
   function onPointerDown(event: PointerEvent) {
+    if(suppressCanceledPointer(event))return;
+    if(interaction.active){
+      if(event.button===2||(event.buttons&2)!==0)cancelFromRightButton(event);
+      else {event.preventDefault();event.stopImmediatePropagation();}
+      return;
+    }
+    if(modalOpen()){event.preventDefault();event.stopImmediatePropagation();return;}
     if(driving.active){event.preventDefault();event.stopImmediatePropagation();return;}
-    if (tool === 'pan' || event.button !== 0 || spacePan || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (tool === 'pan' || event.button !== 0 || (event.buttons&2)!==0 || spacePan || event.altKey || event.ctrlKey || event.metaKey) return;
     const point = pointFromEvent(event);
     if(tool==='citizen') {
       if(citizens.pointerDown(raycaster.ray,camera.getWorldDirection(new THREE.Vector3()),event.timeStamp)) {
+        interaction.begin(event.pointerId,event.button);
         event.preventDefault();event.stopImmediatePropagation();controls.enabled=false;
         renderer.domElement.setPointerCapture(event.pointerId);renderer.domElement.style.cursor=citizens.cursor;
       }
@@ -813,20 +905,33 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
       callbacks.onSelect(point);
       return;
     }
-    event.preventDefault();
+    event.preventDefault();event.stopImmediatePropagation();
+    interaction.begin(event.pointerId,event.button);
     controls.enabled = false;
     dragging = true;
     targetElevation=tileAt(point.x,point.z)?.elevation;
-    lastPainted = point;
-    stroke.clear();
-    addStroke(point);
+    stroke=new ConstructionStroke(tool,brush,size,point);
     currentHover = point;
     renderer.domElement.setPointerCapture(event.pointerId);
     refreshGhost();
   }
 
   function onPointerMove(event: PointerEvent) {
+    if(suppressCanceledPointer(event))return;
     if (driving.active) return;
+    if(modalOpen()){if(interaction.active)cancelInteraction();return;}
+    if(interaction.active){
+      const movement=interaction.movement(event.pointerId,event.buttons);
+      if(movement==='ignore')return;
+      if(movement==='cancel'){
+        if(event.buttons&2)cancelFromRightButton(event);else cancelInteraction();
+        return;
+      }
+      event.preventDefault();event.stopImmediatePropagation();
+    }
+    if(!overCanvas(event)){
+      currentHover=null;callbacks.onHover(null);refreshGhost();return;
+    }
     const point = pointFromEvent(event);
     if(tool==='citizen') {
       citizens.pointerMove(raycaster.ray,event.timeStamp);renderer.domElement.style.cursor=citizens.cursor;
@@ -835,40 +940,49 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     if(tool==='inspect'||tool==='pan'){raycaster.far=pointerOcclusionDistance+.15;driving.hover(raycaster,camera,renderer.domElement.getBoundingClientRect());raycaster.far=Infinity;}
     if (point?.x !== currentHover?.x || point?.z !== currentHover?.z) callbacks.onHover(point);
     currentHover = point;
-    if (dragging && point) {
-      if (lastPainted) interpolateStroke(lastPainted, point);
-      else addStroke(point);
-      lastPainted = point;
-    }
+    if (stroke && point) stroke.update(point);
     refreshGhost();
   }
 
-  function finishStroke(event?: PointerEvent) {
-    if(citizens.holding) {
-      citizens.pointerUp(event?.timeStamp??performance.now());controls.enabled=!driving.active;
-      if(event&&renderer.domElement.hasPointerCapture(event.pointerId))renderer.domElement.releasePointerCapture(event.pointerId);
+  function finishStroke(event: PointerEvent) {
+    if(suppressCanceledPointer(event))return;
+    if(!interaction.owns(event.pointerId))return;
+    if(event.button!==0){
+      if(event.button===2||(event.buttons&2)!==0)cancelFromRightButton(event);
+      return;
+    }
+    event.preventDefault();event.stopImmediatePropagation();
+    const allowed=!modalOpen()&&overCanvas(event)&&(event.buttons&2)===0;
+    const point=allowed?pointFromEvent(event):null;
+    const outcome=interaction.release(event.pointerId,event.button,allowed&&(citizens.holding||!!point));
+    if(outcome!=='commit'){
+      cancelInteraction();releaseCapture(event.pointerId);return;
+    }
+    if(citizens.holding){
+      citizens.pointerMove(raycaster.ray,event.timeStamp);
+      citizens.pointerUp(event.timeStamp);clearInteraction();releaseCapture(event.pointerId);
       renderer.domElement.style.cursor=citizens.cursor;return;
     }
-    if (!dragging) return;
-    dragging = false;
-    controls.enabled = !driving.active;
-    if (event && renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
-    const points = [...stroke.values()];
-    stroke.clear();
-    lastPainted = null;
+    // A fast drag may finish in a tile that has not emitted a pointermove yet.
+    if(point){currentHover=point;stroke?.update(point);}
+    const points=stroke?.points??[],options=buildOptions();
+    clearInteraction();releaseCapture(event.pointerId);
+    if(points.length)callbacks.onPaint(points,options);
     refreshGhost();
-    if (points.length) callbacks.onPaint(points,buildOptions());
-    targetElevation=undefined;
   }
 
-  function cancelStroke() {
-    citizens.cancel();
-    dragging = false;
-    controls.enabled = !driving.active;
-    stroke.clear();
-    lastPainted = null;
-    targetElevation=undefined;
-    refreshGhost();
+  function onPointerCancel(event: PointerEvent): void {
+    if(interaction.owns(event.pointerId))cancelInteraction();
+    if(suppressedPointer===event.pointerId){suppressedPointer=null;controls.enabled=!driving.active;}
+  }
+
+  function onLostPointerCapture(event: PointerEvent): void {
+    if(interaction.owns(event.pointerId))cancelInteraction();
+  }
+
+  function onMouseDown(event: MouseEvent): void {
+    // Browsers emit mousedown, not a second pointerdown, for an RMB/LMB chord.
+    if(event.button===2)cancelFromRightButton(event);
   }
 
   function onPointerLeave() {
@@ -882,7 +996,8 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   }
 
   function inputBlocked(event?:KeyboardEvent) {
-    return !!(event?.target as HTMLElement)?.closest('input,textarea,select,[contenteditable="true"]') || !!document.querySelector('dialog[open],.modal.open');
+    const target=event?.target??document.activeElement;
+    return target instanceof Element&&!!target.closest('button,a,[role="button"],input,textarea,select,[contenteditable="true"]') || modalOpen();
   }
   function onKeyDown(event:KeyboardEvent) {
     if(inputBlocked(event))return;
@@ -895,14 +1010,16 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     pressedKeys.delete(event.code);
     if(['AltLeft','AltRight'].includes(event.code)){spacePan=false;controls.mouseButtons.LEFT=tool==='pan'?THREE.MOUSE.PAN:null;}
   }
-  function onBlur(){for(const code of ['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'])driving.keyUp(code);pressedKeys.clear();spacePan=false;controls.mouseButtons.LEFT=tool==='pan'?THREE.MOUSE.PAN:null;cancelStroke();}
-  function onContextMenu(event: Event) { event.preventDefault(); }
+  function onBlur(){for(const code of ['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'])driving.keyUp(code);pressedKeys.clear();spacePan=false;suppressedPointer=null;controls.mouseButtons.LEFT=tool==='pan'?THREE.MOUSE.PAN:null;cancelInteraction();}
+  function onContextMenu(event: MouseEvent) { event.preventDefault();cancelFromRightButton(event); }
   renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
-  renderer.domElement.addEventListener('pointermove', onPointerMove);
-  renderer.domElement.addEventListener('pointerup', finishStroke);
-  renderer.domElement.addEventListener('pointercancel', cancelStroke);
+  renderer.domElement.addEventListener('pointermove', onPointerMove, true);
+  renderer.domElement.addEventListener('mousedown', onMouseDown, true);
+  renderer.domElement.addEventListener('lostpointercapture', onLostPointerCapture);
   renderer.domElement.addEventListener('pointerleave', onPointerLeave);
-  renderer.domElement.addEventListener('contextmenu', onContextMenu);
+  renderer.domElement.addEventListener('contextmenu', onContextMenu, true);
+  window.addEventListener('pointerup', finishStroke, true);
+  window.addEventListener('pointercancel', onPointerCancel, true);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
@@ -964,7 +1081,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   function setNight(value:boolean){setDayNightCycle(false);setTimeOfDay(value?21:14);}
   function enterDrive(id:number):boolean {
     if(disposed)return false;
-    cancelStroke();driving.clearHover();pressedKeys.clear();
+    cancelInteraction();driving.clearHover();pressedKeys.clear();
     if(!driving.enter(id))return false;
     citizens.setEnabled(false);currentHover=null;selection.visible=false;controls.enabled=false;
     renderer.domElement.style.cursor='default';callbacks.onHover(null);callbacks.onPreview?.(null);
@@ -1020,8 +1137,9 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     updateForests();
     updateUtilities();
     updateRoads();
+    updateServiceFleet();
     driving.setState(state);
-    if(!driving.active&&!dragging&&!citizens.holding)controls.enabled=true;
+    if(!driving.active&&!dragging&&!citizens.holding&&suppressedPointer===null)controls.enabled=true;
     lighting.invalidateReflections();
     dayNightCycle=state.settings.dayNightCycle;
     if(buildingLights!==state.settings.buildingLights)setBuildingLights(state.settings.buildingLights);
@@ -1052,7 +1170,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     previousTime = timestamp;
     {
       elapsed += dt;
-      if(state.speed>0){simulationElapsed+=dt;if(dayNightCycle){timeOfDay=(timeOfDay+dt*.1)%24;state.settings.timeOfDay=timeOfDay;applyDaylight();}}
+      if(state.speed>0){simulationElapsed+=dt*state.speed;if(dayNightCycle){timeOfDay=(timeOfDay+dt*.1)%24;state.settings.timeOfDay=timeOfDay;applyDaylight();}}
       waterMaterial.uniforms.uTime.value = elapsed;
       animateLive(dt);
       if(inputBlocked())for(const code of ['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'])driving.keyUp(code);
@@ -1085,8 +1203,9 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   requestId = requestAnimationFrame(animate);
 
   return {
+    cancelInteraction,
     getDiagnostics(){
-      return {cars:cars.map(car=>({id:car.model.id,x:car.model.position.x,y:car.model.position.y,z:car.model.position.z,yaw:car.model.rotation.y,kind:car.model.userData.vehicleKind,label:car.model.userData.vehicleLabel,dimensions:getVehicleDimensions(car.model),controlled:driving.controlsCar(car),waiting:!!car.model.userData.trafficWaiting})),citizens:citizens.getDebug(),animals:animals.getDebug(),streetlights:streetlights.getDebug(),fires:fireEffects.getDebug(),driving:driving.getStatus(),collisions:collisions.map(event=>({...event,point:{...event.point},normal:{...event.normal}}))};
+      return {cars:cars.map(car=>({id:car.model.id,x:car.model.position.x,y:car.model.position.y,z:car.model.position.z,yaw:car.model.rotation.y,kind:car.model.userData.vehicleKind,label:car.model.userData.vehicleLabel,dimensions:getVehicleDimensions(car.model),controlled:driving.controlsCar(car),waiting:!!car.model.userData.trafficWaiting,waitReason:car.waiting,travelled:car.travelled??0,from:car.from,to:car.to,progress:car.progress,service:car.service?{id:car.service.id,departed:car.service.departed,connected:car.service.route.connected}:null})),traffic:trafficController.getDebug(),trafficSignals:trafficSignals.getDebug(),citizens:citizens.getDebug(),animals:animals.getDebug(),streetlights:streetlights.getDebug(),fires:fireEffects.getDebug(),driving:driving.getStatus(),collisions:collisions.map(event=>({...event,point:{...event.point},normal:{...event.normal}}))};
     },
     getInteractionTargets(){
       const activeCamera=driving.active?driving.camera:camera;
@@ -1105,12 +1224,12 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     update,
     refreshLocale() {
       refreshCanvasLabel();driving.refreshLocale();citizens.refreshLocale();
-      callbacks.onHover(currentHover);refreshGhost();
+      callbacks.onHover(currentHover);refreshGhost(true);
     },
     setTool(nextTool, nextBrush,nextRotation=0) {
       if(driving.active)exitDrive();
       driving.clearHover();
-      cancelStroke();
+      cancelInteraction();
       tool = nextTool;
       citizens.setEnabled(nextTool==='citizen');
       brush = Math.max(1, Math.min(12, Math.floor(nextBrush)));
@@ -1157,6 +1276,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     },
     screenshot() { renderRealtime(); return renderer.domElement.toDataURL('image/png'); },
     dispose() {
+      cancelInteraction();
       disposed = true;
       cancelAnimationFrame(requestId);
       observer.disconnect();
@@ -1165,16 +1285,18 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
       outputPass.dispose();
       composer.dispose();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown, true);
-      renderer.domElement.removeEventListener('pointermove', onPointerMove);
-      renderer.domElement.removeEventListener('pointerup', finishStroke);
-      renderer.domElement.removeEventListener('pointercancel', cancelStroke);
+      renderer.domElement.removeEventListener('pointermove', onPointerMove, true);
+      renderer.domElement.removeEventListener('mousedown', onMouseDown, true);
+      renderer.domElement.removeEventListener('lostpointercapture', onLostPointerCapture);
       renderer.domElement.removeEventListener('pointerleave', onPointerLeave);
-      renderer.domElement.removeEventListener('contextmenu', onContextMenu);
+      renderer.domElement.removeEventListener('contextmenu', onContextMenu, true);
+      window.removeEventListener('pointerup', finishStroke, true);
+      window.removeEventListener('pointercancel', onPointerCancel, true);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('visibilitychange',onBlur);
-      citizens.dispose();animals.dispose();streetlights.dispose();fireEffects.dispose();
+      citizens.dispose();animals.dispose();streetlights.dispose();fireEffects.dispose();trafficSignals.dispose();
       driving.dispose();lighting.dispose();
       scene.traverse(object => {
         if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {

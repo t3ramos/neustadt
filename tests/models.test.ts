@@ -3,7 +3,9 @@ import test from 'node:test';
 import * as THREE from 'three';
 import {
   createFacilityActors, createTileModel, getModelFootprint, setModelNightBlend, setModelWet, updateFacilityActors,
+  createFacilityServiceVehicle,
 } from '../src/models.ts';
+import { getFacilityAccess, sampleFacilityAccessHeight } from '../src/facility-access.ts';
 import { createCity, TOOL_DEFS } from '../src/simulation.ts';
 import { createPathTracingSnapshot } from '../src/raytracing.ts';
 import type { Tile, TileKind } from '../src/types.ts';
@@ -172,7 +174,7 @@ function actorTransforms(object: THREE.Object3D): number[] {
 }
 
 test('facility actors animate with a progressing clock, freeze with a paused clock, and remain finite', () => {
-  const actorKinds: TileKind[] = ['wind', 'stadium', 'airport', 'seaport', 'police', 'fire', 'hospital'];
+  const actorKinds: TileKind[] = ['wind', 'stadium', 'airport', 'seaport'];
   const localState = { ...state, speed: 1 as 0 | 1 | 2 | 3 };
   for (const kind of actorKinds) {
     const actors = createFacilityActors(tile(kind, { rotation: 1 }), localState);
@@ -201,6 +203,146 @@ test('only a facility anchor creates actors; follower cells and regular lots do 
   assert.equal(createFacilityActors({ ...anchor, x: anchor.x + 1 }, state), null);
   assert.equal(createFacilityActors(tile('residential'), state), null);
   assert.equal(createFacilityActors(tile('power'), state), null);
+  for (const kind of ['fire', 'police', 'hospital'] as const) {
+    assert.equal(createFacilityActors(tile(kind), state), null,
+      `${kind} vehicles must come from the real road fleet, not a disconnected animation`);
+  }
+});
+
+test('connected facilities reserve an unscaled access ring and their visible ramp matches its shared height sampler', () => {
+  for (const kind of facilityKinds) for (const rotation of [0, 1, 2, 3] as const) {
+    const localState = createCity(81, true, 40);
+    for (const cell of localState.tiles) Object.assign(cell, { kind: 'empty', level: 0, elevation: 0, anchor: -1 });
+    const [width, depth] = getModelFootprint(kind, rotation), x = 12, z = 12, anchor = z * localState.size + x;
+    for (let dz = 0; dz < depth; dz++) for (let dx = 0; dx < width; dx++) {
+      Object.assign(localState.tiles[(z + dz) * localState.size + x + dx], { kind, level: 1, rotation, anchor, elevation: .5 });
+    }
+    for (let dx = -1; dx <= width; dx++) localState.tiles[(z + depth) * localState.size + x + dx].kind = 'road';
+    const rootTile = localState.tiles[anchor], plan = getFacilityAccess(localState, rootTile)!;
+    assert.equal(plan.connected, true, `${kind} rotation ${rotation} needs an adjacent street connection`);
+    const model = createTileModel(rootTile, localState), content = model.getObjectByName('facility-content');
+    assert.ok(content, 'connected building must leave space for its driveway');
+    assert.equal(content.scale.x, plan.contentScale.x);
+    assert.equal(content.scale.z, plan.contentScale.z);
+    let pavement = 0, foundation = 0;
+    model.traverse(part => {
+      if (!(part instanceof THREE.Mesh) || !part.userData.drivingSurface) return;
+      if (part.name === 'facility-access-paving') pavement++;
+      else if (part.name === 'facility-foundation-surface') foundation++;
+      else return;
+      assert.equal(part.parent, model, 'road and foundation cannot shrink with the building');
+      const positions = part.geometry.getAttribute('position');
+      for (let i = 0; i < part.geometry.userData.surfaceVertexCount; i++) {
+        const wx = positions.getX(i) + x - localState.size / 2 + .5;
+        const wz = positions.getZ(i) + z - localState.size / 2 + .5;
+        const expected = sampleFacilityAccessHeight(plan, wx, wz) ?? plan.baseY + .052;
+        assert.ok(Math.abs(positions.getY(i) + plan.baseY - expected) < 2e-5,
+          `${kind} rotation ${rotation} leaves a ${positions.getY(i) + plan.baseY - expected} ledge above the drive at ${wx},${wz}`);
+      }
+    });
+    assert.ok(pavement >= 5, 'four perimeter lanes and the gate must meet the street');
+    assert.equal(foundation, 1, 'the foundation itself must follow the ramp');
+  }
+});
+
+test('road-going emergency models have correct forward axes and complete collision dimensions', () => {
+  for (const kind of ['firetruck', 'ambulance', 'police'] as const) {
+    const car = createFacilityServiceVehicle(kind), bounds = boundsOf(car), size = bounds.getSize(new THREE.Vector3());
+    assert.equal(car.userData.vehicleForward, '+Z');
+    assert.equal(car.userData.vehicleKind, kind);
+    assert.ok(car.userData.vehicleLabel);
+    assert.deepEqual(car.position.toArray(), [0, 0, 0]);
+    assert.ok(Math.abs(bounds.min.y) < 1e-8, 'the root must be the tire contact plane');
+    assert.ok(Math.abs(car.userData.vehicleDimensions.width - size.x) < 1e-8);
+    assert.ok(Math.abs(car.userData.vehicleDimensions.length - size.z) < 1e-8);
+    assert.ok(Math.abs(car.userData.vehicleDimensions.height - bounds.max.y) < 1e-8);
+    assert.ok(car.userData.vehicleDimensions.wheelBase > 0 && car.userData.vehicleDimensions.mass > 0);
+    assert.ok(car.userData.collisionHalfLength >= Math.max(Math.abs(bounds.min.z), Math.abs(bounds.max.z)));
+  }
+});
+
+test('a factory faces its actual street and the selected gate opens the curb without a fake intersection', () => {
+  for (const [dx, dz, rotation] of [[0, 1, 0], [-1, 0, 1], [0, -1, 2], [1, 0, 3]]) {
+    const localState = createCity(81, true, 40);
+    for (const cell of localState.tiles) Object.assign(cell, { kind: 'empty', level: 0, elevation: 0, anchor: -1 });
+    const factory = localState.tiles[12 * localState.size + 12];
+    Object.assign(factory, { kind: 'industrial', level: 2, rotation: 0, elevation: .1, variation: 0 });
+    const road = localState.tiles[(12 + dz) * localState.size + 12 + dx];
+    road.kind = 'road';
+    const continuation = localState.tiles[(12 + dz + (dx ? 1 : 0)) * localState.size + 12 + dx + (dz ? 1 : 0)];
+    continuation.kind = 'road';
+    const plan = getFacilityAccess(localState, factory)!;
+    assert.ok(plan?.connected, `factory must connect on side ${dx},${dz}`);
+    assert.equal(plan.rotation, rotation);
+    assert.equal(factory.rotation, 0, 'visual street orientation must not rewrite the saved lot');
+    const model = createTileModel(factory, localState), content = model.getObjectByName('facility-content')!;
+    assert.ok(content);
+    assert.equal(content.scale.z, .73);
+    assert.equal(content.position.z, -.20);
+    assert.ok(Math.abs(content.parent!.rotation.y + rotation * Math.PI / 2) < 1e-8);
+    assert.equal(model.children.filter(part => part.name === 'facility-access-paving').length, 1,
+      'a small industrial lot needs a loading apron, not a perimeter highway');
+    const roadModel = createTileModel(road, localState), apron = roadModel.getObjectByName('road-facility-apron');
+    assert.ok(apron, 'the driveway must visibly cross the street sidewalk');
+    const end = plan.points[plan.points.length - 1];
+    assert.ok(Math.abs((dx ? apron.position.z : apron.position.x)
+      - (dx ? end.z - (road.z - localState.size / 2 + .5) : end.x - (road.x - localState.size / 2 + .5))) < 1e-8,
+    'the curb opening follows the actual lane offset');
+    assert.equal(meshParts(roadModel, .075, .004, .12).length, 0, 'a factory entrance is not a road intersection');
+    assert.equal(createTileModel(continuation, localState).getObjectByName('road-facility-apron'), undefined,
+      'only the selected gate opens the curb');
+  }
+});
+
+test('triangulated access surfaces support wheels between vertices without bridging curved ramps', () => {
+  const cases = [
+    { kind: 'police', rotation: 1, side: 'west', elevation: .5 },
+    { kind: 'fire', rotation: 3, side: 'east', elevation: .5 },
+    { kind: 'hospital', rotation: 2, side: 'north', elevation: .2 },
+    { kind: 'airport', rotation: 0, side: 'south', elevation: 0 },
+  ] as const;
+  for (const { kind, rotation, side, elevation } of cases) {
+    const localState = createCity(917, true, 40), x = 15, z = 15;
+    for (const cell of localState.tiles) Object.assign(cell, { kind: 'empty', level: 0, elevation: 0, anchor: -1 });
+    const [width, depth] = getModelFootprint(kind, rotation), anchor = z * localState.size + x;
+    for (let dz = 0; dz < depth; dz++) for (let dx = 0; dx < width; dx++) {
+      Object.assign(localState.tiles[(z + dz) * localState.size + x + dx], { kind, level: 1, rotation, anchor, elevation });
+    }
+    if (side === 'north' || side === 'south') {
+      const roadZ = side === 'north' ? z - 1 : z + depth;
+      for (let roadX = x - 2; roadX < x + width + 2; roadX++) localState.tiles[roadZ * localState.size + roadX].kind = 'road';
+    } else {
+      const roadX = side === 'west' ? x - 1 : x + width;
+      for (let roadZ = z - 2; roadZ < z + depth + 2; roadZ++) localState.tiles[roadZ * localState.size + roadX].kind = 'road';
+    }
+    const rootTile = localState.tiles[anchor], plan = getFacilityAccess(localState, rootTile)!;
+    assert.ok(plan.connected);
+    const model = createTileModel(rootTile, localState);
+    model.position.set(x - localState.size / 2 + .5, elevation, z - localState.size / 2 + .5);
+    model.updateMatrixWorld(true);
+    const surfaces: THREE.Mesh[] = [];
+    model.traverse(part => { if (part instanceof THREE.Mesh && part.userData.drivingSurface) surfaces.push(part); });
+    if (kind === 'airport') {
+      const triangles = surfaces.reduce((total, mesh) => total + mesh.geometry.index!.count / 3, 0);
+      assert.ok(triangles < 20_000, `a flat airport should retain coarse pavement, got ${triangles} triangles`);
+    }
+    const ray = new THREE.Raycaster();
+    ray.ray.direction.set(0, -1, 0);
+    for (let i = 0; i + 1 < plan.points.length; i += 3) {
+      const a = plan.points[i], b = plan.points[i + 1], dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz);
+      if (!length) continue;
+      for (const offset of [-.11, 0, .11]) {
+        const wx = a.x + dx * .37 - dz / length * offset, wz = a.z + dz * .37 + dx / length * offset;
+        const expected = sampleFacilityAccessHeight(plan, wx, wz);
+        if (expected === null) continue;
+        ray.ray.origin.set(wx, 20, wz);
+        const hit = ray.intersectObjects(surfaces, false)[0];
+        assert.ok(hit, `${kind} needs real visible pavement beneath its wheel tracks`);
+        assert.ok(Math.abs(hit.point.y - expected) <= .004,
+          `${kind} ramp geometry and suspension disagree by ${Math.abs(hit.point.y - expected)} at ${wx},${wz}`);
+      }
+    }
+  }
 });
 
 function allModelMaterials(object: THREE.Object3D): Set<THREE.Material> {

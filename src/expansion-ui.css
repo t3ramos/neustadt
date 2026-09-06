@@ -19,7 +19,7 @@
 .preview-cost b { font-size:21px; letter-spacing:-.5px; }
 .preview-cost>span { font-size:9px; color:#c8d8ca; }
 .build-preview p { font-size:10px; line-height:1.5; opacity:.9; margin:9px 0 0; }
-.build-preview small { display:block; font-size:9px; color:#c9dab8; margin-top:9px; }
+.build-preview small { display:block; font-size:11px; line-height:1.5; color:#d7e5cb; margin-top:9px; }
 .camera-controls { display:grid; grid-template-columns:repeat(2,1fr); width:76px; }
 .camera-controls>span { grid-column:1/-1; width:auto; }
 .camera-controls button { width:30px; }
@@ -32,11 +32,11 @@
 .weather-options { display:flex; align-items:center; gap:10px; background:#eff3e6; border:1px solid #dfe7d4; border-radius:10px; padding:17px; margin-bottom:22px; flex-wrap:wrap; }
 .weather-options>div { flex:1; min-width:180px; }
 .weather-options h3 { font-size:13px; margin-bottom:7px; }
-.weather-options p { font-size:11px; color:#819076; line-height:1.5; }
+.weather-options p { font-size:12px; color:var(--readable-muted); line-height:1.5; }
 .daylight-settings { border:1px solid #e0e6d8; border-radius:9px; padding:16px; margin:0 0 20px; }
 .daylight-settings label { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12px; }
 .daylight-settings input[type=checkbox] { width:18px; height:18px; accent-color:#638d70; }
-.daylight-settings small { display:block; color:#849177; font-size:10px; line-height:1.6; margin-top:7px; }
+.daylight-settings small { display:block; color:var(--readable-muted); font-size:12px; line-height:1.6; margin-top:7px; }
 .daylight-settings input[type=range] { width:100%; margin-top:15px; accent-color:#79946a; }
 .disaster-switch { display:flex; align-items:center; justify-content:space-between; gap:22px; padding:18px; margin-bottom:20px; border:1px solid #d9e1ce; border-radius:10px; background:#ecf0e3; }
 .disaster-switch strong { font-size:13px;display:block; }
@@ -80,6 +80,15 @@ body.driving .drive-hud { bottom:30px; }
 @media(max-width:440px) {
   .topbar { gap:6px; }
   .top-actions { padding-left:0;gap:1px; }
-  .topbar .language-control select { width:30px;min-width:30px; }
+  /* Native arrows can consume one of the two locale letters at this width. */
+  .topbar .language-control select { width:30px;min-width:30px;appearance:none;-webkit-appearance:none;text-align:center;text-align-last:center; }
   .top-actions .icon-btn { width:23px; }
+}
+
+/* Preserve readable labels and prices when the tool row scrolls on phones. */
+@media (max-width: 700px) {
+  .build-tool { flex-basis: 72px; min-width: 72px; padding: 3px 4px; gap: 1px; }
+  .tool-name, .build-tool small { line-height: 1.2; }
+  .tool-icon { height: 20px; }
+  .tool-icon svg { width: 20px; height: 20px; }
 }
