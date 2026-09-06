@@ -229,7 +229,7 @@ export function university(g: THREE.Group): void {
 }
 export function park(g: THREE.Group, tile: Tile): void {
   const variant = buildingVariant(tile);
-  slab(g, palette.grass);
+  slab(g, palette.grass, variant === 3 ? 1 : 0.9, variant === 3 ? 1 : 0.9);
   if (variant === 1) {
     cylinder(g, palette.stone, 0, 0.04, 0, 0.7, 0.05);
     cylinder(g, palette.water, 0, 0.073, 0, 0.59, 0.02);
@@ -247,9 +247,40 @@ export function park(g: THREE.Group, tile: Tile): void {
     return;
   }
   if (variant === 3) {
-    for (let i = 0; i < 3; i++) {
-      box(g, palette.stone, 0, 0.06 + i * 0.08, -0.27 + i * 0.25, 0.75, 0.1, 0.18);
-      box(g, palette.green, 0, 0.12 + i * 0.08, -0.27 + i * 0.25, 0.69, 0.025, 0.12);
+    // Open meadow tiles meet flush. Sparse world-aligned walks join across a
+    // whole park, rather than outlining every tile as a separate garden bed.
+    const verticalWalk = ((tile.x % 5) + 5) % 5 === 0;
+    const horizontalWalk = ((tile.z % 4) + 4) % 4 === 0;
+    if (verticalWalk) box(g, 0xd8c9aa, 0, 0.031, 0, 0.12, 0.006, 1).castShadow = false;
+    if (horizontalWalk) box(g, 0xd8c9aa, 0, 0.031, 0, 1, 0.006, 0.12).castShadow = false;
+    // Low, irregular flower drifts occupy only some lawn tiles. Position and
+    // colour come from the tile coordinates, so existing saves need no edits.
+    const seed = (Math.imul(tile.x, 73856093) ^ Math.imul(tile.z, 19349663)) >>> 0;
+    if (seed % 3 !== 0) {
+      const x = (((seed >>> 3) % 55) - 27) / 100;
+      const z = (((seed >>> 10) % 55) - 27) / 100;
+      const px = verticalWalk && Math.abs(x) < 0.18 ? (x < 0 ? -0.25 : 0.25) : x;
+      const pz = horizontalWalk && Math.abs(z) < 0.18 ? (z < 0 ? -0.25 : 0.25) : z;
+      const foliage = mesh(g, crownGeometry, 0x73955f, px, 0.033, pz, 0.2, 0.014, 0.15, seed % 6);
+      foliage.castShadow = false;
+      foliage.userData.drivingSurface = true; // Soft ground cover, not a solid obstacle.
+      for (let i = 0; i < 3; i++) {
+        const angle = (seed % 17) * 0.37 + i * 2.3;
+        const flower = mesh(
+          g,
+          crownGeometry,
+          [0xd5a1bd, 0xe7c66e, 0xe6e1ce][(seed + i) % 3],
+          px + Math.cos(angle) * 0.059,
+          0.046 + i * 0.002,
+          pz + Math.sin(angle) * 0.045,
+          0.043,
+          0.016,
+          0.037,
+          angle,
+        );
+        flower.castShadow = false;
+        flower.userData.drivingSurface = true;
+      }
     }
     return;
   }

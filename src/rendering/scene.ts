@@ -1886,7 +1886,11 @@ export function createCityScene(
       tz = z - half + 0.5,
       ty = Math.max(0, tileAt(Math.round(x), Math.round(z))?.elevation ?? 0);
     controls.target.set(tx, ty, tz);
-    camera.position.set(tx - 42, ty + 42, tz + 48);
+    // Orthographic zoom changes the visible span, not the camera distance. Keep
+    // the whole region in front of its near plane even after zooming far out.
+    const offset = new THREE.Vector3(-42, 42, 48);
+    offset.setLength(Math.max(offset.length(), size * 1.75));
+    camera.position.copy(controls.target).add(offset);
     camera.zoom = showcase ? 0.62 : 1.05;
     camera.updateProjectionMatrix();
     controls.update();
@@ -2155,7 +2159,30 @@ export function createCityScene(
   return {
     cancelInteraction,
     getDiagnostics() {
+      const activeCamera = viewCamera();
       return {
+        camera: {
+          mode: driving.active ? 'driving' : 'city',
+          position: camera.position.toArray(),
+          target: controls.target.toArray(),
+          direction: camera.getWorldDirection(new THREE.Vector3()).toArray(),
+          zoom: camera.zoom,
+          frustum: {
+            left: camera.left,
+            right: camera.right,
+            top: camera.top,
+            bottom: camera.bottom,
+            near: camera.near,
+            far: camera.far,
+          },
+          targetNdc: controls.target.clone().project(camera).toArray(),
+          cityCenterNdc: new THREE.Vector3(0, 0, 0).project(camera).toArray(),
+          controlsEnabled: controls.enabled,
+          polarAngle: controls.getPolarAngle(),
+          azimuthalAngle: controls.getAzimuthalAngle(),
+          activePosition: activeCamera.position.toArray(),
+          activeDirection: activeCamera.getWorldDirection(new THREE.Vector3()).toArray(),
+        },
         performance: metrics.snapshot(),
         buildingQueue: buildingChunks.diagnostics(),
         liveInstances: liveInstances.diagnostics(),
@@ -2393,10 +2420,12 @@ export function createCityScene(
         target = new THREE.Vector3(minX - half + width / 2, ground + 0.55, minZ - half + depth / 2);
       // Keep the office's facade and rooftop visible from its street-facing side.
       controls.minPolarAngle = Math.min(controls.minPolarAngle, 0.035);
-      const offset = new THREE.Vector3(-5.5, 8, 8).applyAxisAngle(
-        new THREE.Vector3(0, 1, 0),
-        (-tile.rotation * Math.PI) / 2,
-      );
+      // A short orbit radius clips foreground terrain behind the near plane
+      // when the user zooms out after leaving the separate building preview.
+      // Distance does not change orthographic framing; zoom still fits the lot.
+      const offset = new THREE.Vector3(-5.5, 8, 8)
+        .setLength(Math.max(32, size * 1.75))
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), (-tile.rotation * Math.PI) / 2);
       controls.target.copy(target);
       camera.position.copy(target).add(offset);
       camera.zoom = THREE.MathUtils.clamp(

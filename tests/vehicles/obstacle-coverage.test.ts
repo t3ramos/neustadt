@@ -100,13 +100,26 @@ test('rendered walls and physical props collide across every RCI level, variant 
           );
 });
 
-test('every civic facility rotation and every park/beach variant retains rendered obstacles', () => {
+test('civic facilities and furnished parks retain obstacles while open meadows stay traversable', () => {
   for (const kind of Object.keys(FACILITY_FOOTPRINTS) as TileKind[])
     for (const rotation of [0, 1, 2, 3] as const)
       assertRenderedWalls(fixture(kind, 0, rotation), `${kind}/${rotation}`);
   for (const kind of ['park', 'beach'] as const)
     for (let variant = 0; variant < 5; variant++) {
       if (kind === 'beach' && variant === 1) continue; // Only towels and a low ball.
+      if (kind === 'park' && variant === 3) {
+        const meadow = fixture(kind, variant);
+        assert.ok(new THREE.Box3().setFromObject(meadow.model).max.y < 0.12);
+        for (const x of [-0.4, -0.2, 0, 0.2, 0.4])
+          for (const z of [-0.4, -0.2, 0, 0.2, 0.4])
+            assert.equal(
+              meadow.world.pointBlocked(-4.5 + x, -4.5 + z, 0.025),
+              false,
+              'flat meadow has no hidden former planter collision',
+            );
+        meadow.world.dispose();
+        continue;
+      }
       assertRenderedWalls(fixture(kind, variant), `${kind}/${variant}`);
     }
 });
