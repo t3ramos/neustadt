@@ -12,7 +12,7 @@ Diese README beschreibt den Entwicklungsstand von v3.0.0. Veröffentlichung und 
 
 ## Wähle deinen Einstieg
 
-- **New York übernehmen:** Starte mit einer bewohnten, gestalteten Metropole auf 96 × 96 Feldern, mit Alleen, zentralem Park, Ufer, Versorgung, dichtem Stadtkern, mittelhohem Stadtgürtel und lockeren Vororten. Das Szenario ist eine stilisierte Stadt, keine geografisch genaue Nachbildung.
+- **Kassel übernehmen:** Starte mit einer bewohnten, gestalteten Metropole auf 128 × 128 Feldern, mit Alleen, zentralem Park, Ufer, Versorgung, dichtem Stadtkern, mittelhohem Stadtgürtel und lockeren Vororten. Das Szenario ist eine stilisierte Stadt, keine geografisch genaue Nachbildung.
 - **Eigene Stadt gründen:** Beginne auf einer unbebauten Region mit 128 × 128 Feldern, einer großzügigen ebenen Baufläche im Zentrum und Bergen an den äußeren Rändern. Ein numerischer oder textueller Seed erzeugt eine wiederholbare Landschaft.
 - **Bestehende Stadt fortsetzen:** Kompatible Browser-Spielstände laden automatisch und pausiert. Bestehende Kartengrößen, einschließlich 40 × 40 und 128 × 128, bleiben unterstützt. Kleinere Regionen lassen sich direkt auf 128 × 128 erweitern.
 
@@ -25,6 +25,8 @@ Zeichne Straßen und weise Wohn-, Gewerbe- und Industriegebiete aus. Für alle d
 Straßen, Stromleitungen und Wasserrohre bilden getrennte Netze. Verbundene Zonenblöcke reichen Strom über gemeinsame Feldkanten weiter, auch durch noch unbebaute Zonen. Straßen und Lücken unterbrechen die Verbindung, sofern keine Stromleitung sie überbrückt. Wasserrohre versorgen nahe Grundstücke; Wasserwerke benötigen Strom. Prüfe mit den Strom- und Wasseransichten sowohl Verbindungen als auch Kapazität.
 
 Sorge für Parks, Schulen, Kliniken, Polizei und Feuerwehr. Passe Steuern und Dienstbudgets an, verwalte Kredite und schalte mit dem Stadtwachstum Bahn, erneuerbare Energie, Recycling, Stadion, Hafen, Universität und Flughafen frei. Bauvorschau und Werkzeugleiste zeigen aktuelle Preise, Bauflächen, Voraussetzungen und Hindernisse direkt im Spiel.
+
+Beim Straßenziehen sucht die Vorschau automatisch einen zusammenhängenden Weg um Zonen und belegte Gebäudegrundstücke. Gebaut wird die zuletzt angezeigte Route.
 
 Hebe, senke oder ebne unbebautes Gelände für neue Bauplätze. Große Anlagen benötigen trockene, ebene Flächen und lassen sich mit **R** drehen. Geeignete angrenzende Straßen verbinden sich mit ihren Zufahrten und Höfen. Häfen brauchen zusätzlich ein passendes Ufer. Prüfe vor dem Bauen die gesamte Vorschau; Rechtsklick oder **Esc** bricht einen Entwurf ab.
 
@@ -44,7 +46,7 @@ Autos folgen Fahrspuren, Ampeln, Kreuzungsfreigaben und Warteschlangen. Dienstfa
 
 Mit dem Greifwerkzeug lassen sich Bewohner anheben und mit Ragdoll-Physik werfen. Schwere Kollisionen und Stürze können zu Todesfällen und sichtbarem Blut führen; beobachtete Vorfälle beeinflussen die Zufriedenheit. Brand, Erdbeben und Sturm sind im optionalen Katastrophen-Experimentiermodus verfügbar. Nach einer Katastrophe pausiert die Stadt zum Ansehen. Vor dem Fortsetzen oder unvereinbaren Änderungen kann die Aktion rückgängig gemacht werden.
 
-Ländliche Gewerbegrundstücke können Bauernhofarchitektur entwickeln; ihre ländliche Identität bleibt im Spielstand erhalten. Wiesen ergänzen Gras, Blumen und Steine. Geeignete Seen bieten drei Windsurfern und einem Ruderboot eine geprüfte Route auf dem Wasser. Ein platzierbarer Uferstrand schafft weitere Freizeitmöglichkeiten; New York erhält ihn nicht automatisch. Flughäfen besitzen fünf Layoutvarianten mit Flugrouten, die auf Freiraum gegenüber ihren Terminalbauten geprüft werden.
+Ländliche Gewerbegrundstücke können Bauernhofarchitektur entwickeln; ihre ländliche Identität bleibt im Spielstand erhalten. Wiesen ergänzen Gras, Blumen und Steine. Geeignete Seen bieten drei Windsurfern und einem Ruderboot eine geprüfte Route auf dem Wasser. Ein platzierbarer Uferstrand schafft weitere Freizeitmöglichkeiten; Kassel erhält ihn nicht automatisch. Flughäfen besitzen fünf Layoutvarianten mit Flugrouten, die auf Freiraum gegenüber ihren Terminalbauten geprüft werden.
 
 ## Klang und Musik
 
@@ -54,7 +56,7 @@ Audioeinstellungen werden im Browser getrennt von Stadtexporten gespeichert. Pau
 
 ## Ein architektonisches Easter Egg
 
-Das Bürogebäude als Easter Egg entsteht beim vierten geeigneten Gewerbeneubau mittlerer Dichte, sofern sein Sechsfeldgrundstück und eine freie Vorderseite Platz finden. Es richtet sich zu einem begrünten Vorplatz und zur Straße aus. Pro Karte gibt es höchstens eines; das New-York-Szenario enthält es bereits. Es basiert auf dem **linken Bürogebäude** der bereitgestellten Blender-Quelle, ergänzt dessen unfertige Fassaden und trägt den originalen Schriftzug hoch an der Vorderseite. Der Menüeintrag bleibt bis zur Entdeckung im Stadtmenü verborgen. Die isolierte Modellvorschau führt zurück in die bestehende Stadt.
+Das Bürogebäude als Easter Egg entsteht beim vierten geeigneten Gewerbeneubau mittlerer Dichte, sofern sein Sechsfeldgrundstück und eine freie Vorderseite Platz finden. Es richtet sich zu einem begrünten Vorplatz und zur Straße aus. Pro Karte gibt es höchstens eines; das Kassel-Szenario enthält es bereits. Es basiert auf dem **linken Bürogebäude** der bereitgestellten Blender-Quelle, ergänzt dessen unfertige Fassaden und trägt den originalen Schriftzug hoch an der Vorderseite. Der Menüeintrag bleibt bis zur Entdeckung im Stadtmenü verborgen. Die isolierte Modellvorschau führt zurück in die bestehende Stadt.
 
 Die [Easter-Egg-Assetdokumentation](public/assets/models/easter-egg-office-README.md) beschreibt Herkunft, Änderungen, technische Budgets und Reproduktion. Die ursprüngliche Quelldatei bleibt unverändert. Die Nutzung des Namens und Schriftzugs überträgt keine Markenrechte.
 
@@ -87,10 +89,10 @@ Benötigt werden Node.js **ab 20.19 innerhalb der 20er-Version oder ab 22.12**, 
 ```sh
 npm ci
 npm run build
-npm run preview -- --port 4173 --strictPort
+npm run preview
 ```
 
-Öffne [localhost:4173](http://127.0.0.1:4173/) und lasse das Terminal während des Spiels offen. Für Entwicklung mit automatischen Aktualisierungen:
+Öffne [localhost:4399](http://127.0.0.1:4399/) und lasse das Terminal während des Spiels offen. Für Entwicklung mit automatischen Aktualisierungen:
 
 ```sh
 npm run dev

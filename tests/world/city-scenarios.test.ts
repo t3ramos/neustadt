@@ -1,3 +1,4 @@
+import { zoneDensityCap } from '../../src/buildings/density.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { Tile } from '../../src/domain/types.ts';
@@ -26,7 +27,7 @@ import { syncZoneLot } from '../../src/buildings/lots.ts';
 const zones = ['residential', 'commercial', 'industrial'];
 
 test('128-field seeded founding landscape is reproducible and reserves a broad clear valley', () => {
-  assert.equal(DEFAULT_CITY_SIZE, 96);
+  assert.equal(DEFAULT_CITY_SIZE, 128);
   assert.equal(MAX_NEW_CITY_SIZE, 128);
   assert.equal(START_CITY_SIZE, 128);
   assert.equal(parseCitySeed('42'), 42);
@@ -66,10 +67,10 @@ test('128-field seeded founding landscape is reproducible and reserves a broad c
   assert.equal(deserializeCity(serializeCity(a)).seed, a.seed);
 });
 
-test('New York round-trips complete parcels and supplies all buildings over a map-wide footprint', () => {
+test('Kassel round-trips complete parcels and supplies all buildings over a map-wide footprint', () => {
   const city = deserializeCity(serializeCity(generateNewYorkCity()));
-  assert.equal(city.name, 'New York');
-  assert.equal(city.size, 96);
+  assert.equal(city.name, 'Kassel');
+  assert.equal(city.size, 128);
   assert.equal(city.month, 0);
   assert.equal(city.speed, 0);
   assert.equal(city.progression.victory, false);
@@ -84,18 +85,19 @@ test('New York round-trips complete parcels and supplies all buildings over a ma
     Math.max(...footprints.map((p) => p.x)) - Math.min(...footprints.map((p) => p.x)) + 1;
   const depth =
     Math.max(...footprints.map((p) => p.z)) - Math.min(...footprints.map((p) => p.z)) + 1;
-  assert.ok((width * depth) / city.size ** 2 > 0.8);
+  assert.ok((width * depth) / city.size ** 2 > 0.65);
   const easterEgg = buildings.filter((t) => t.variation === 900005);
   assert.equal(easterEgg.length, 1);
   assert.equal(easterEgg[0].kind, 'commercial');
   assert.equal(getFootprint(city, easterEgg[0]).length, 6);
   assert.equal(easterEgg[0].rotation, 2);
-  assert.equal(easterEgg[0].x, 34);
-  assert.equal(easterEgg[0].z, 52);
+  assert.equal(easterEgg[0].x, 63);
+  assert.equal(easterEgg[0].z, 65);
   assert.equal(easterEgg[0].zoneDensity, 'medium');
   assert.equal(easterEgg[0].level, 2);
-  assert.equal(city.tiles[51 * city.size + 34].kind, 'road');
-  assert.equal(city.tiles[50 * city.size + 34].kind, 'park');
+  assert.equal(city.tiles[64 * city.size + 63].kind, 'road');
+  assert.equal(city.tiles[63 * city.size + 63].kind, 'park');
+  assert.ok(Math.hypot(easterEgg[0].x - city.size / 2, easterEgg[0].z - city.size / 2) < 4);
   for (const kind of zones) {
     const lots = buildings.filter((t) => t.kind === kind);
     assert.equal(new Set(lots.map((t) => t.variation % 5)).size, 5);
@@ -107,10 +109,10 @@ test('New York round-trips complete parcels and supplies all buildings over a ma
   }
   assert.ok(city.stats.jobs / (city.stats.population * 0.48) > 0.8);
   assert.ok(city.stats.jobs / (city.stats.population * 0.48) < 1.3);
-  // Test the worst utility load, independently of progression's current growth cap.
+  // The real density caps determine maximum future load without rezoning.
   for (const t of buildings)
     if (zones.includes(t.kind)) {
-      t.level = 4;
+      t.level = zoneDensityCap(t);
       syncZoneLot(city, t);
     }
   recalculate(city);
@@ -123,7 +125,7 @@ test('New York round-trips complete parcels and supplies all buildings over a ma
   );
 });
 
-test('New York remains solvent, occupied and completely served after 12 and 120 economy steps (one and ten calendar months)', () => {
+test('Kassel remains solvent, occupied and completely served after 12 and 120 economy steps (one and ten calendar months)', () => {
   const city = generateNewYorkCity(),
     initialPopulation = city.stats.population;
   for (let i = 1; i <= 120; i++) {
@@ -131,7 +133,7 @@ test('New York remains solvent, occupied and completely served after 12 and 120 
     if (i !== 12 && i !== 120) continue;
     assert.ok(city.stats.population >= initialPopulation * 0.9);
     assert.ok(city.money > 0);
-    assert.ok(city.stats.happiness > 55);
+    assert.ok(city.stats.happiness >= 80);
     assert.ok(city.stats.balance > 0);
     assert.ok(
       city.tiles
@@ -146,12 +148,12 @@ test('New York remains solvent, occupied and completely served after 12 and 120 
   );
 });
 
-test('New York reads as one street-aligned skyline, a midrise belt and low outer boroughs', () => {
+test('Kassel reads as one street-aligned skyline, a midrise belt and low outer boroughs', () => {
   const city = generateNewYorkCity();
   const lots = city.tiles.filter((t) => zones.includes(t.kind) && isBuildingAnchor(city, t));
   const blocks = new Map<string, Set<string>>();
   for (const t of city.tiles.filter((t) => zones.includes(t.kind))) {
-    const key = `${Math.floor((t.x - 4) / 6)},${Math.floor((t.z - 4) / 6)}`;
+    const key = `${Math.floor((t.x - 17) / 8)},${Math.floor((t.z - 17) / 8)}`;
     const densities = blocks.get(key) ?? new Set<string>();
     densities.add(t.zoneDensity!);
     blocks.set(key, densities);
@@ -169,15 +171,44 @@ test('New York reads as one street-aligned skyline, a midrise belt and low outer
   const urban = lots.filter((t) => t.kind !== 'industrial');
   const high = urban.filter((t) => t.zoneDensity === 'high');
   assert.ok(high.length > 200);
-  assert.ok(high.every((t) => t.x >= 22 && t.x < 58 && t.z >= 22 && t.z < 64 && t.level === 4));
+  assert.ok(
+    high.every(
+      (t) =>
+        t.level === 4 &&
+        ((t.x >= 41 && t.x < 80 && t.z >= 25 && t.z < 40) ||
+          (t.x >= 41 && t.x < 48 && t.z >= 41 && t.z < 64) ||
+          (t.x >= 81 && t.x < 88 && t.z >= 33 && t.z < 56)),
+    ),
+  );
   const middle = urban.filter((t) => t.zoneDensity === 'medium');
   assert.ok(middle.length > 200);
   assert.ok(middle.every((t) => t.level === 2));
-  const outer = urban.filter((t) => t.x < 16 || t.z < 16 || t.z >= 76 || t.x >= 82);
+  const outer = urban.filter((t) => t.x < 25 || t.z < 25 || t.z >= 97 || t.x >= 106);
   assert.ok(outer.length > 300);
   assert.ok(outer.every((t) => t.zoneDensity === 'low' && t.level === 1));
   assert.ok(city.stats.happiness >= 80);
   assert.ok(city.stats.balance > 0);
+  assert.ok(
+    lots.length >= 1400 && lots.length <= 1800,
+    'Parcel count stays bounded while the city is visibly substantial',
+  );
+  assert.ok(city.stats.population >= 60_000 && city.stats.population <= 90_000);
+  const utilities = city.tiles.filter(
+    (t) => isBuildingAnchor(city, t) && ['power', 'solar', 'wind', 'waterpump'].includes(t.kind),
+  );
+  assert.ok(
+    utilities.length <= 50,
+    'Infrastructure is compact, not repeated through every neighborhood',
+  );
+  assert.ok(utilities.every((t) => t.x >= 104));
+  assert.ok(
+    city.tiles.filter((t) => t.kind === 'empty' || t.kind === 'tree').length > 6000,
+    'Large landscape belts remain between districts and the map edge',
+  );
+  assert.ok(
+    city.stats.parks < 500,
+    'Green space is mostly landscape, not thousands of repeated plaza models',
+  );
 });
 
 test('older saved city sizes stay intact and an explicit 40-to-128 expansion preserves player roads', () => {

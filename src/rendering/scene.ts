@@ -52,6 +52,7 @@ import { createAnimalSystem } from '../wildlife/animals';
 import { createStreetlights } from './lighting/streetlights';
 import { applyStableShadowFiltering, createCityLighting } from './lighting/environment';
 import { sampleRoadHeight } from './infrastructure/roads';
+import { routeRoad } from '../construction/road-routing';
 import { getPowerLayout, powerLayoutSignature } from '../infrastructure/power-layout';
 import { createPowerGridModel } from './infrastructure/power';
 import { getRegionMargin } from './world/surroundings';
@@ -1328,8 +1329,26 @@ export function createCityScene(
     ghostEdges.visible = true;
     const points =
       stroke?.points ?? (tool !== 'inspect' && tool !== 'pan' ? footprint(currentHover) : []);
-    const result = points.length ? previewBuild(state, points, tool, buildOptions()) : null;
+    const existingRoads =
+      tool === 'road' ? points.filter((p) => tileAt(p.x, p.z)?.kind === 'road') : [];
+    const plannedPoints =
+      tool === 'road' ? points.filter((p) => tileAt(p.x, p.z)?.kind !== 'road') : points;
+    const result = points.length
+      ? previewBuild(state, plannedPoints, tool, buildOptions())
+      : stroke && tool === 'road'
+        ? {
+            valid: [],
+            invalid: [currentHover],
+            count: 0,
+            cost: 0,
+            message: tr(
+              'Keine sichere Straßenverbindung. Starte auf einem freien Feld oder einer Straße.',
+              'No safe road connection. Start on a free tile or an existing road.',
+            ),
+          }
+        : null;
     const valid = new Map((result?.valid ?? []).map((p) => [`${p.x}:${p.z}`, p]));
+    for (const p of existingRoads) valid.set(`${p.x}:${p.z}`, p);
     const invalid = new Map((result?.invalid ?? []).map((p) => [`${p.x}:${p.z}`, p]));
     const display = new Map([...valid, ...invalid]);
     if (FACILITY_TOOLS.has(tool) && points.length) {
@@ -1611,7 +1630,13 @@ export function createCityScene(
     controls.enabled = false;
     dragging = true;
     targetElevation = tileAt(point.x, point.z)?.elevation;
-    stroke = new ConstructionStroke(tool, brush, size, point);
+    stroke = new ConstructionStroke(
+      tool,
+      brush,
+      size,
+      point,
+      tool === 'road' ? (start, end) => routeRoad(state, start, end) : undefined,
+    );
     currentHover = point;
     renderer.domElement.setPointerCapture(event.pointerId);
     refreshGhost();
@@ -1846,18 +1871,23 @@ export function createCityScene(
     const occupied = state.tiles.filter(
       (t) => ['residential', 'commercial', 'industrial'].includes(t.kind) && t.level > 0,
     );
-    const x = occupied.length
-      ? occupied.reduce((n, t) => n + t.x, 0) / occupied.length
-      : size * 0.38;
-    const z = occupied.length
-      ? occupied.reduce((n, t) => n + t.z, 0) / occupied.length
-      : size * 0.44;
+    const showcase = state.seed === 6092026 && size === 128;
+    const x = showcase
+      ? 64
+      : occupied.length
+        ? occupied.reduce((n, t) => n + t.x, 0) / occupied.length
+        : size * 0.38;
+    const z = showcase
+      ? 51
+      : occupied.length
+        ? occupied.reduce((n, t) => n + t.z, 0) / occupied.length
+        : size * 0.44;
     const tx = x - half + 0.5,
       tz = z - half + 0.5,
       ty = Math.max(0, tileAt(Math.round(x), Math.round(z))?.elevation ?? 0);
     controls.target.set(tx, ty, tz);
     camera.position.set(tx - 42, ty + 42, tz + 48);
-    camera.zoom = 1.05;
+    camera.zoom = showcase ? 0.62 : 1.05;
     camera.updateProjectionMatrix();
     controls.update();
   }

@@ -122,12 +122,14 @@ test('rural building variants remain inside 4/6-tile parcels and batch animals',
     }
 });
 
-test('New York has a served agricultural fringe, meadow relief and deterministic bounded lowland decoration', () => {
+test('Kassel has a served agricultural fringe, meadow relief and deterministic bounded lowland decoration', () => {
   const city = generateNewYorkCity(),
     farms = city.tiles.filter((t) => isBuildingAnchor(city, t) && isRuralCommercial(city, t));
   assert.ok(farms.length >= 6);
-  assert.ok(farms.every((t) => t.x >= 82 && t.connected && t.powered && t.watered));
-  const fringe = city.tiles.filter((t) => t.x >= 82 && t.x < 94 && t.kind === 'empty');
+  assert.ok(farms.every((t) => t.x >= 106 && t.connected && t.powered && t.watered));
+  const fringe = city.tiles.filter(
+    (t) => t.x >= 106 && t.x < 124 && t.z < 80 && t.kind === 'empty',
+  );
   assert.ok(fringe.length > 350);
   assert.ok(fringe.some((t) => t.elevation > 0));
   const loaded = deserializeCity(serializeCity(city));
@@ -138,8 +140,8 @@ test('New York has a served agricultural fringe, meadow relief and deterministic
   let grass = 0,
     flowers = 0,
     rocks = 0;
-  for (let z = 0; z < 96; z += 16) {
-    const chunk = buildLandscapeChunk(city, 80, z, 16);
+  for (let z = 0; z < city.size; z += 16) {
+    const chunk = buildLandscapeChunk(city, 112, z, 16);
     try {
       grass += chunk.userData.grassCount;
       flowers += chunk.userData.flowerCount;
@@ -215,22 +217,29 @@ test('first simulation growth assigns a saved farm and zoning undo owns the whol
   city.tax = 0;
   recalculate(city);
   const points = [];
-  for (let z = 88; z < 90; z++) for (let x = 88; x < 91; x++) points.push({ x, z });
+  for (let z = 14; z < 16; z++)
+    for (let x = 117; x < 120; x++) {
+      points.push({ x, z });
+      Object.assign(city.tiles[z * city.size + x], { kind: 'empty', elevation: 0 });
+    }
+  // Open country needs a real feeder; only enclosed street blocks auto-distribute power.
+  for (let z = 13; z <= 15; z++)
+    Object.assign(city.tiles[z * city.size + 117], { hasPowerLine: true, hasPipe: true });
   const before = captureConstructionState(city),
     history: Parameters<typeof undoConstruction>[1] = [];
   const built = build(city, points, 'commercial');
   assert.ok(built.ok);
   // Deterministic parcel variant selected before the recorded zoning snapshot.
   for (const p of points) {
-    const t = city.tiles[p.z * 96 + p.x];
+    const t = city.tiles[p.z * city.size + p.x];
     t.variation = 4;
     t.age = 10;
   }
   recordConstruction(history, before, city, 'commercial', built);
-  let farm = city.tiles[88 * 96 + 88];
+  let farm = city.tiles[14 * city.size + 117];
   for (let step = 0; step < 40 && farm.level === 0; step++) {
     for (const p of points)
-      if (p.x !== farm.x || p.z !== farm.z) city.tiles[p.z * 96 + p.x].age = 0;
+      if (p.x !== farm.x || p.z !== farm.z) city.tiles[p.z * city.size + p.x].age = 0;
     tick(city);
   }
   assert.ok(farm.level > 0);
@@ -238,13 +247,13 @@ test('first simulation growth assigns a saved farm and zoning undo owns the whol
   assert.equal(farm.ruralCommercial, true);
   farm.level = 4;
   syncZoneLot(city, farm);
-  Object.assign(city.tiles[90 * 96 + 88], { kind: 'residential', level: 1 });
+  Object.assign(city.tiles[13 * city.size + 117], { kind: 'residential', level: 1 });
   recalculate(city);
   const loaded = deserializeCity(serializeCity(city));
-  assert.ok(isRuralCommercial(loaded, loaded.tiles[88 * 96 + 88]));
+  assert.ok(isRuralCommercial(loaded, loaded.tiles[14 * city.size + 117]));
   assert.ok(undoConstruction(city, history).ok);
   for (const p of points) {
-    const t = city.tiles[p.z * 96 + p.x];
+    const t = city.tiles[p.z * city.size + p.x];
     assert.equal(t.ruralCommercial, undefined);
     assert.ok(t.kind === 'empty' || t.kind === 'tree');
   }

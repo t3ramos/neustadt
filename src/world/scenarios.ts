@@ -9,9 +9,9 @@ import {
 import { createCity, recalculate, TOOL_DEFS } from '../simulation/city-simulation';
 import { shouldAssignRuralCommercial } from './rural';
 import { createProgression } from '../simulation/progression';
-import type { CityState, Point, TileKind } from '../domain/types';
+import type { CityState, Point, TileKind, ZoneDensity } from '../domain/types';
 
-export const DEFAULT_CITY_SIZE = 96;
+export const DEFAULT_CITY_SIZE = 128;
 export const MAX_NEW_CITY_SIZE = 128;
 export const START_CITY_SIZE = 128;
 /** Expand directly into the full region so its outer landscape is generated only once. */
@@ -44,219 +44,328 @@ export function generateSmallCity(seed: string | number = 2026, name = 'Meine St
   city.history = [{ month: 0, population: 0, money: city.money, happiness: city.stats.happiness }];
   return city;
 }
-/** Authored compact metropolis. All placements are batched before one network recalculation. */
+/** Authored metropolis with a civic landscape at its center and compact outer infrastructure. */
 export function generateNewYorkCity(): CityState {
   const city = createCity(6092026, true, DEFAULT_CITY_SIZE),
     size = city.size;
   const at = (x: number, z: number) => city.tiles[z * size + x];
-  const set = (x: number, z: number, kind: TileKind) =>
-    Object.assign(at(x, z), {
+  const set = (x: number, z: number, kind: TileKind) => {
+    const t = at(x, z);
+    Object.assign(t, {
       kind,
       level: 0,
       elevation: kind === 'water' ? -1 : 0,
       anchor: -1,
       age: 24,
       rotation: 0,
+      fire: 0,
+      hasPipe: false,
+      hasPowerLine: false,
     });
+    delete t.lotWidth;
+    delete t.lotDepth;
+    delete t.zoneDensity;
+    delete t.ruralCommercial;
+    return t;
+  };
   const region = (x: number, z: number, w: number, d: number, kind: TileKind) => {
     for (let dz = 0; dz < d; dz++) for (let dx = 0; dx < w; dx++) set(x + dx, z + dz, kind);
   };
+  const street = (x1: number, z1: number, x2: number, z2: number) => {
+    for (let z = z1; z <= z2; z++)
+      for (let x = x1; x <= x2; x++) {
+        const t = at(x, z);
+        if (t.anchor >= 0) throw Error('Street crosses an authored building');
+        Object.assign(set(x, z, 'road'), { hasPipe: true, hasPowerLine: true });
+      }
+  };
+  const garden = (x: number, z: number) => Object.assign(set(x, z, 'park'), { variation: 3 });
   const facility = (
     x: number,
     z: number,
     kind: TileKind,
     rotation: 0 | 1 | 2 | 3 = 0,
-    variation?: number,
+    variant = (x + z) % 5,
   ) => {
     const fp = TOOL_DEFS[kind]!.footprint!,
       [w, d] = rotation % 2 ? [fp[1], fp[0]] : fp;
-    const v = variation ?? (x * 17 + z * 31) % 5;
     for (let dz = 0; dz < d; dz++)
       for (let dx = 0; dx < w; dx++) {
-        const t = at(x + dx, z + dz);
-        if (t.anchor >= 0) throw Error(`Scenario overlap: ${kind}`);
+        if (at(x + dx, z + dz).anchor >= 0 || at(x + dx, z + dz).kind === 'road')
+          throw Error(`Scenario overlap: ${kind} ${x},${z}`);
         Object.assign(set(x + dx, z + dz, kind), {
           level: 1,
           anchor: z * size + x,
           rotation,
-          variation: v,
+          variation: variant,
           hasPipe: true,
         });
       }
   };
-  for (const t of city.tiles)
-    Object.assign(t, {
-      kind: 'tree',
-      elevation: 0,
-      level: 0,
-      anchor: -1,
-      hasPipe: false,
-      hasPowerLine: false,
-      fire: 0,
-    });
-  // Fifteen walkable blocks per axis, a planted edge, and the East River waterfront.
-  for (let z = 3; z <= 93; z++)
-    for (let x = 3; x <= 93; x++)
-      set(x, z, (x - 3) % 6 === 0 || (z - 3) % 6 === 0 ? 'road' : 'empty');
-  region(94, 0, 2, 96, 'water');
-  // Central Park preserves surrounding avenue continuity and a pond with planted banks.
-  region(28, 28, 17, 23, 'park');
-  for (let z = 31; z < 48; z++)
-    for (let x = 30; x < 43; x++) {
-      const d = ((x - 36) / 5) ** 2 + ((z - 39) / 7) ** 2;
-      if (d < 1) set(x, z, 'water');
-      else if ((x + z) % 3 === 0) set(x, z, 'tree');
-    }
-  // Forty-five clean-energy courts retain ample capacity, opening the outer two columns to countryside.
-  for (let bz = 0; bz < 15; bz++)
-    for (let bx = 10; bx < 13; bx++) {
-      const x = 4 + bx * 6,
-        z = 4 + bz * 6;
-      region(x, z, 5, 5, 'park');
-      facility(x, z, 'solar');
-      facility(x, z + 3, 'wind');
-      facility(x + 3, z + 3, 'waterpump');
-    }
-  // Agricultural fringe: small commercial farmsteads among open meadows and low hills.
-  // Their road-front parcels stay flat; the surrounding fields have gentle visible relief.
-  for (let bz = 0; bz < 15; bz++)
-    for (let bx = 13; bx < 15; bx++) {
-      const x = 4 + bx * 6,
-        z = 4 + bz * 6;
-      for (let dz = 0; dz < 5; dz++)
-        for (let dx = 0; dx < 5; dx++) {
-          const t = set(x + dx, z + dz, (dx + dz + bz * 3) % 11 === 0 ? 'tree' : 'empty');
-          if (bz < 5 && dx > 1 && dz > 1) t.elevation = ((dx + dz + bz) % 3) * 0.5;
-        }
-      if (bz % 3 === 0 && !(bx === 14 && bz === 0)) {
-        region(x, z, 3, 2, 'commercial');
-        const t = at(x, z);
-        for (let dz = 0; dz < 2; dz++)
-          for (let dx = 0; dx < 3; dx++) at(x + dx, z + dz).zoneDensity = 'low';
-        t.variation = (bz + bx) % 5;
-        if (!claimZoneLot(city, t, [3, 2])) throw Error('Farm parcel claim failed');
-        t.level = 1;
-        syncZoneLot(city, t);
+  const parcel = (
+    x: number,
+    z: number,
+    w: number,
+    d: number,
+    kind: TileKind,
+    density: ZoneDensity,
+    variant: number,
+  ) => {
+    for (let dz = 0; dz < d; dz++)
+      for (let dx = 0; dx < w; dx++) {
+        if (!['empty', 'tree', 'park'].includes(at(x + dx, z + dz).kind))
+          throw Error(`Parcel overlap ${x},${z}`);
+        Object.assign(set(x + dx, z + dz, kind), { zoneDensity: density, variation: variant });
       }
+    const t = at(x, z);
+    if (w * d > 1 && !claimZoneLot(city, t, [w, d])) throw Error('Scenario parcel claim failed');
+    t.level = zoneDensityCap(t);
+    syncZoneLot(city, t);
+    return t;
+  };
+
+  // Broad meadow and woodland belts frame a composed city, rather than filling the region with roads.
+  for (const t of city.tiles) {
+    const woodland = t.x < 13 || t.z < 12 || t.z > 119;
+    const clump = Math.sin(t.x * 0.24) + Math.cos(t.z * 0.21) + Math.sin((t.x + t.z) * 0.12);
+    set(t.x, t.z, woodland && clump > 0.3 && (t.x * 7 + t.z * 11) % 4 !== 0 ? 'tree' : 'empty');
+    if ((t.x < 10 || t.z < 7) && (t.x + t.z) % 5 !== 0) t.elevation = ((t.x * 3 + t.z) % 4) * 0.5;
+  }
+  region(124, 0, 4, size, 'water');
+  // Walkable eight-tile blocks leave room for genuine courtyards and setbacks.
+  for (let x = 16; x <= 104; x += 8) street(x, 16, x, 112);
+  for (let z = 16; z <= 112; z += 8) street(16, z, 104, z);
+
+  // Central Park: one generous lake, clear lawns, small planted terraces and woodland edges.
+  region(49, 41, 31, 39, 'empty');
+  for (let z = 42; z < 79; z++)
+    for (let x = 50; x < 79; x++) {
+      const lake = ((x - 64) / 10) ** 2 + ((z - 52) / 9) ** 2;
+      if (lake < 1) set(x, z, 'water');
+      else if ((x < 53 || x > 76 || z > 73) && (x * 3 + z * 7) % 5 === 0) set(x, z, 'tree');
+      else if ((z === 62 || z === 72) && x >= 55 && x <= 73) garden(x, z);
     }
-  // Broken woodland edges leave sunny meadow openings around the whole map.
-  for (const t of city.tiles)
-    if ((t.x < 3 || t.z < 3 || t.z > 93) && t.kind === 'tree' && (t.x * 7 + t.z * 11) % 5 < 3) {
-      t.kind = 'empty';
-      t.elevation = (t.x + t.z) % 9 === 0 ? 0.5 : 0;
-    }
-  // Service courts repeat across the residential boroughs, leaving readable green courtyards.
-  for (const bz of [1, 4, 8, 11, 14])
-    for (const bx of [0, 3, 6, 9]) {
-      const x = 4 + bx * 6,
-        z = 4 + bz * 6;
-      if (x >= 28 && x <= 44 && z >= 28 && z <= 50) continue;
-      region(x, z, 5, 5, 'park');
-      facility(x, z, 'hospital');
-      facility(x + 3, z, 'police');
-      facility(x, z + 3, 'fire');
-      const sx = bx === 9 ? x - 6 : x + 6;
-      if (at(sx, z).kind !== 'empty') continue;
-      region(sx, z, 5, 5, 'park');
-      facility(sx, z, 'school');
-    }
-  // Airport occupies two joined blocks south of the park; river quays face east.
-  region(46, 76, 11, 11, 'park');
-  facility(46, 76, 'airport');
-  region(10, 76, 11, 5, 'park');
-  facility(10, 76, 'stadium');
-  region(46, 52, 5, 5, 'park');
-  facility(46, 52, 'university');
-  // The medium business landmark faces north: its street, then Central Park.
-  // A landscaped block and broad park foreground preserve both diagonal facade views.
-  region(34, 52, 5, 5, 'park');
-  region(34, 52, 3, 2, 'commercial');
-  for (let dz = 0; dz < 2; dz++)
-    for (let dx = 0; dx < 3; dx++) at(34 + dx, 52 + dz).zoneDensity = 'medium';
-  const easterEgg = at(34, 52);
+  // The park boulevard is deliberately the foreground of the centrally positioned business.
+  street(48, 64, 80, 64);
+  for (let z = 65; z <= 69; z++) for (let x = 60; x <= 68; x++) garden(x, z);
+  region(63, 65, 3, 2, 'commercial');
+  for (let z = 65; z < 67; z++) for (let x = 63; x < 66; x++) at(x, z).zoneDensity = 'medium';
+  const easterEgg = at(63, 65);
   if (!claimEasterEggLot(city, easterEgg, true))
-    throw Error('EASTER_EGG park-front parcel could not be claimed');
+    throw Error('Central Easter Egg has no open park frontage');
   easterEgg.level = 2;
   syncZoneLot(city, easterEgg);
-  for (const z of [70, 82]) {
-    // Replace only the final campus block, including its complete original facilities.
-    for (let dz = 0; dz < 5; dz++)
-      for (let dx = 0; dx < 5; dx++) Object.assign(at(88 + dx, z + dz), { anchor: -1 });
-    region(88, z, 6, 5, 'park');
-    facility(91, z, 'seaport', 3);
-  }
+
+  // Civic buildings are woven into individual neighborhoods, not copied into identical service courts.
   for (const [x, z] of [
-    [52, 64],
-    [58, 70],
-    [28, 82],
+    [25, 25],
+    [57, 17],
+    [81, 25],
+    [17, 49],
+    [89, 49],
+    [25, 81],
+    [57, 89],
+    [81, 81],
   ])
-    if (at(x, z).kind === 'empty') {
-      region(x, z, 5, 5, 'park');
-      facility(x, z, 'recycling');
+    facility(x, z, 'hospital');
+  for (const [x, z] of [
+    [33, 17],
+    [65, 25],
+    [89, 33],
+    [25, 57],
+    [81, 65],
+    [41, 89],
+    [89, 89],
+  ])
+    facility(x, z, 'police');
+  for (const [x, z] of [
+    [17, 33],
+    [49, 17],
+    [81, 41],
+    [17, 73],
+    [73, 81],
+    [97, 81],
+  ])
+    facility(x, z, 'fire');
+  for (const [x, z] of [
+    [25, 41],
+    [41, 25],
+    [73, 17],
+    [89, 57],
+    [33, 73],
+    [49, 97],
+    [81, 97],
+  ])
+    facility(x, z, 'school');
+  for (const [x, z] of [
+    [41, 41],
+    [73, 33],
+    [41, 81],
+    [73, 97],
+  ])
+    facility(x, z, 'hospital');
+  for (const [x, z] of [
+    [49, 33],
+    [33, 49],
+    [73, 89],
+    [89, 73],
+  ])
+    facility(x, z, 'police');
+  for (const [x, z] of [
+    [41, 49],
+    [65, 33],
+    [49, 81],
+    [89, 105],
+  ])
+    facility(x, z, 'fire');
+  for (const [x, z] of [
+    [57, 105],
+    [17, 89],
+  ])
+    facility(x, z, 'school');
+  facility(57, 33, 'university');
+  facility(33, 89, 'university');
+  facility(41, 65, 'university');
+  facility(81, 73, 'university', 0, 4);
+  facility(57, 81, 'stadium');
+  street(16, 113, 28, 113);
+  facility(17, 114, 'airport');
+
+  // One solar meadow and one compact energy/water campus replace the former utility checkerboard.
+  street(104, 8, 104, 120);
+  street(120, 16, 120, 120);
+  for (const z of [8, 16, 24, 44, 64, 72, 80, 96, 112, 120]) street(104, z, 123, z);
+  street(108, 24, 108, 44);
+  street(114, 24, 114, 44);
+  for (const x of [109, 115]) for (const z of [25, 29, 33, 37]) facility(x, z, 'solar');
+  for (const [x, z] of [
+    [109, 41],
+    [115, 41],
+    [121, 17],
+    [121, 21],
+  ])
+    facility(x, z, 'wind');
+  street(108, 48, 120, 48);
+  street(108, 52, 120, 52);
+  street(108, 56, 120, 56);
+  street(108, 60, 120, 60);
+  street(108, 44, 108, 64);
+  for (const x of [109, 112, 115, 118])
+    for (const z of [49, 53, 57, 61]) facility(x, z, 'waterpump');
+  // Power stations share access lanes and a planted buffer outside the residential districts.
+  street(108, 80, 108, 120);
+  street(114, 80, 114, 120);
+  for (const x of [109, 115])
+    for (const z of [81, 86, 91, 97, 102, 107, 113]) facility(x, z, 'power');
+  for (const [x, z] of [
+    [97, 97],
+    [105, 81],
+    [105, 105],
+  ])
+    facility(x, z, 'recycling');
+  facility(121, 97, 'seaport', 3);
+  facility(121, 105, 'seaport', 3, 4);
+
+  // An agricultural edge along quiet country lanes, with open land between farms and the city.
+  for (const z of [8, 16, 64, 72])
+    for (const x of [109, 117]) {
+      const farm = parcel(x, z + 1, 3, 2, 'commercial', 'low', (x + z) % 5);
+      farm.ruralCommercial = true;
+      syncZoneLot(city, farm);
     }
-  // Inner courtyards keep every single-tile home within the network frontage radius.
-  for (let z = 6; z < 93; z += 6)
-    for (let x = 6; x < 93; x += 6) if (at(x, z).kind === 'empty') set(x, z, 'park');
-  // Shared lot metadata makes these genuine parcels rather than overlaid visual towers.
-  let parcel = 0;
-  for (let z = 4; z < 93; z++)
-    for (let x = 4; x < 93; x++) {
-      if (at(x, z).kind !== 'empty' || x >= 82) continue;
-      const blockX = Math.floor((x - 4) / 6),
-        blockZ = Math.floor((z - 4) / 6),
-        industrial = x >= 46 && z >= 64;
-      // Street-aligned districts make the skyline legible from the overview:
-      // Midtown around Central Park, an apartment belt, then low outer boroughs.
-      // The industrial waterfront steps down from its northern employment hub.
-      const zoneDensity = industrial
-        ? blockZ === 10
+  for (const t of city.tiles)
+    if (t.kind === 'empty' && t.x >= 106 && t.x < 124 && t.z < 80 && (t.x + t.z) % 7 === 0)
+      t.elevation = 0.5;
+
+  let parcelNumber = 0;
+  for (let bz = 0; bz < 12; bz++)
+    for (let bx = 0; bx < 11; bx++) {
+      const x0 = 17 + bx * 8,
+        z0 = 17 + bz * 8;
+      const industrial = x0 >= 89 && z0 >= 89;
+      const inCity = ((x0 + 3 - 60) / 51) ** 2 + ((z0 + 3 - 62) / 56) ** 2 < 1.08;
+      if ((!inCity && !industrial) || (x0 >= 97 && !industrial)) continue;
+      // Compact skyline north of the lake, flanked by midrise boroughs and garden suburbs.
+      const high =
+        (x0 >= 41 && x0 < 81 && z0 >= 25 && z0 < 41) ||
+        (x0 >= 41 && x0 < 49 && z0 >= 41 && z0 < 65) ||
+        (x0 >= 81 && x0 < 89 && z0 >= 33 && z0 < 57);
+      const density: ZoneDensity = industrial
+        ? z0 < 97
           ? 'high'
-          : blockZ <= 12
+          : z0 < 105
             ? 'medium'
             : 'low'
-        : blockX >= 3 && blockX <= 8 && blockZ >= 3 && blockZ <= 9
+        : high
           ? 'high'
-          : blockX >= 2 && blockX <= 9 && blockZ >= 2 && blockZ <= 11
+          : x0 >= 25 && x0 < 97 && z0 >= 25 && z0 < 97
             ? 'medium'
             : 'low';
       const kind: TileKind = industrial
         ? 'industrial'
-        : (blockX + blockZ * 2) % 5 === 0 || (blockX === 8 && blockZ >= 4 && blockZ <= 8)
+        : (bx + bz * 2) % 6 === 0 || (x0 === 65 && z0 === 25)
           ? 'commercial'
           : 'residential';
-      const variant = parcel++ % 5,
-        wanted = variant === 4 ? [3, 2] : variant === 3 ? [2, 2] : variant === 2 ? [2, 1] : [1, 1];
-      let [w, d] = wanted;
-      if (
-        !Array.from({ length: w * d }, (_, i) => at(x + (i % w), z + Math.floor(i / w))).every(
-          (t) => t?.kind === 'empty',
-        )
-      )
-        [w, d] = [1, 1];
-      for (let dz = 0; dz < d; dz++)
-        for (let dx = 0; dx < w; dx++)
-          Object.assign(set(x + dx, z + dz, kind), { variation: variant, zoneDensity });
-      const t = at(x, z);
-      if (w * d > 1 && !claimZoneLot(city, t, [w, d])) throw Error('Scenario parcel claim failed');
-      t.level = zoneDensityCap(t);
-      syncZoneLot(city, t);
+      // A green court occupies every block's deep interior; all homes retain street and pipe access.
+      for (let dz = 2; dz <= 4; dz++)
+        for (let dx = 2; dx <= 4; dx++) {
+          const t = at(x0 + dx, z0 + dz);
+          if (t.kind === 'empty' && !(t.x >= 49 && t.x <= 79 && t.z >= 41 && t.z <= 79)) {
+            if (dx === 3 && dz === 3) garden(t.x, t.z);
+            else if ((dx + dz + bx) % 3 === 0) set(t.x, t.z, 'tree');
+          }
+        }
+      for (let dz = 0; dz < 7; dz++)
+        for (let dx = 0; dx < 7; dx++) {
+          const x = x0 + dx,
+            z = z0 + dz,
+            t = at(x, z);
+          if (
+            t.kind !== 'empty' ||
+            (dx >= 2 && dx <= 4 && dz >= 2 && dz <= 4) ||
+            (x >= 49 && x <= 79 && z >= 41 && z <= 79)
+          )
+            continue;
+          // Low homes have breathing room; larger downtown parcels produce a deliberate skyline rhythm.
+          if (density === 'low' && !industrial && (dx + dz + bx) % 5 === 0) {
+            if ((dx + dz) % 2 === 0) set(x, z, 'tree');
+            continue;
+          }
+          if (kind === 'residential' && density === 'high' && dx >= 2 && dx <= 4) {
+            if (dz === 0 || dz === 6) garden(x, z);
+            continue;
+          }
+          const variant = parcelNumber++ % 5;
+          let [w, d] = variant === 4 || variant === 1 ? [3, 2] : variant === 3 ? [2, 2] : [2, 1];
+          const free = () =>
+            Array.from({ length: w * d }, (_, i) => ({
+              x: x + (i % w),
+              z: z + Math.floor(i / w),
+            })).every(
+              (p) =>
+                p.x < x0 + 7 &&
+                p.z < z0 + 7 &&
+                at(p.x, p.z).kind === 'empty' &&
+                !(kind === 'residential' && density === 'high' && p.x - x0 >= 2 && p.x - x0 <= 4) &&
+                !(p.x - x0 >= 2 && p.x - x0 <= 4 && p.z - z0 >= 2 && p.z - z0 <= 4) &&
+                !(p.x >= 49 && p.x <= 79 && p.z >= 41 && p.z <= 79),
+            );
+          if (!free()) [w, d] = [1, 1];
+          parcel(x, z, w, d, kind, density, variant);
+        }
     }
   for (const t of city.tiles)
     if (
       t.kind === 'commercial' &&
       t.anchor === t.z * size + t.x &&
       [4, 6].includes(zoneLotArea(t)) &&
-      !isEasterEggLot(t)
+      !isEasterEggLot(t) &&
+      t.ruralCommercial === undefined
     ) {
       t.ruralCommercial = shouldAssignRuralCommercial(city, t);
       syncZoneLot(city, t);
     }
-  for (const t of city.tiles)
-    if (t.kind === 'road') {
-      t.hasPowerLine = true;
-      t.hasPipe = true;
-    }
-  city.name = 'New York';
+  city.name = 'Kassel';
   city.money = 20_000_000;
   city.month = 0;
   city.tickProgress = 0;
@@ -280,12 +389,12 @@ export function generateNewYorkCity(): CityState {
     {
       id: 1,
       month: 0,
-      title: 'Willkommen in New York',
+      title: 'Willkommen in Kassel',
       message:
-        'Übernimm eine vorbereitete Stadt mit Hochhauskern am Central Park, mittleren Wohnvierteln, niedrigen Außenbezirken und Hafen. Die Simulation startet pausiert.',
-      titleEn: 'Welcome to New York',
+        'Eine große Stadt rund um den Stadtpark: Entdecke das besondere Geschäftsgebäude am See, die Skyline und die grünen Wohnviertel. Die Simulation startet pausiert.',
+      titleEn: 'Welcome to Kassel',
       messageEn:
-        'Take over a prepared city with a high-rise core around Central Park, midrise neighborhoods, low outer boroughs and a harbor. The simulation starts paused.',
+        'A large city around its central park: discover the special business by the lake, the skyline and leafy neighborhoods. The simulation starts paused.',
       type: 'info',
     },
   ];

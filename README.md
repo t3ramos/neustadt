@@ -12,7 +12,7 @@ This README describes the v3.0.0 development version. Publication and final rele
 
 ## Choose your starting point
 
-- **Take over New York:** begin with a populated, authored metropolis on a 96 × 96 region, with avenues, a central park, waterfront, services, a dense downtown, a medium-rise belt, and lower-density suburbs. This is a stylized scenario rather than a geographic reconstruction.
+- **Take over Kassel:** begin with a populated, authored metropolis on a 128 × 128 region, with avenues, a central park, waterfront, services, a dense downtown, a medium-rise belt, and lower-density suburbs. This is a stylized scenario rather than a geographic reconstruction.
 - **Found your own city:** start on an undeveloped 128 × 128 region with a substantial, level central building area and mountains toward the outer edges. Enter a numeric or text seed to generate a repeatable landscape.
 - **Continue an existing city:** compatible browser saves load automatically, paused. Existing map sizes, including 40 × 40 and 128 × 128, remain supported. Any smaller region can be expanded directly to 128 × 128.
 
@@ -25,6 +25,8 @@ Draw roads and zone residential, commercial, and industrial land. All three zone
 Roads, power lines, and water pipes form separate networks. Connected zoned blocks share electricity through their tile edges, including undeveloped zones. Roads and gaps interrupt that connection unless you bridge them with a power line. Water pipes serve nearby lots, and waterworks need electricity. Use the Power and Water overlays to check both connections and capacity.
 
 Provide parks, schools, clinics, police, and fire protection. Adjust taxes and service budgets, manage borrowing, and unlock railways, renewable energy, recycling, a stadium, a seaport, a university, and an airport as the city develops. Construction previews and the toolbar show current prices, footprints, requirements, and obstacles directly in the game.
+
+Dragging roads automatically finds a connected route around zoned areas and occupied buildings. The final preview is the route that gets built.
 
 Raise, lower, or level undeveloped terrain to prepare building sites. Large facilities need dry, level space; rotate them with **R**. Suitable adjacent roads connect to their driveways and yards. Ports also need a waterfront. Building previews let you inspect the full footprint before committing; right-click or **Esc** cancels a draft.
 
@@ -44,7 +46,7 @@ Cars follow lanes, traffic lights, junction reservations, and queues. Service ve
 
 The resident-grab tool supports lifting and throwing people with ragdoll physics. Serious collisions and falls can cause deaths and visible blood; witnessed incidents affect city happiness. Fire, earthquakes, and storms are available through the optional disaster experiment mode. Disaster actions pause the simulation for inspection and can be undone before continuing or making incompatible changes.
 
-Rural commercial lots can develop farmhouse-style architecture, and their rural identity persists in saves. Meadows add grass, flowers, and stones. Suitable lakes support three windsurfers and a rowing boat on a checked water route. A placeable shoreline beach adds another recreation option; New York does not start with one automatically. Airports have five layout variants, with aircraft routes checked for clearance from their terminal structures.
+Rural commercial lots can develop farmhouse-style architecture, and their rural identity persists in saves. Meadows add grass, flowers, and stones. Suitable lakes support three windsurfers and a rowing boat on a checked water route. A placeable shoreline beach adds another recreation option; Kassel does not start with one automatically. Airports have five layout variants, with aircraft routes checked for clearance from their terminal structures.
 
 ## Sound and music
 
@@ -54,7 +56,7 @@ Audio preferences are saved in the browser, separately from city exports. Pausin
 
 ## A small architectural Easter egg
 
-An office-building Easter Egg appears at the fourth qualifying medium-density commercial opening, provided its six-tile lot and clear frontage fit. It faces a landscaped forecourt and street. At most one exists on a map, and the New York scenario includes it. It adapts the **left office building** from the supplied Blender source, completes its unfinished elevations, and places the original wordmark high on the front facade. Its menu entry is hidden until discovered in the city menu. The isolated model preview returns to the existing city.
+An office-building Easter Egg appears at the fourth qualifying medium-density commercial opening, provided its six-tile lot and clear frontage fit. It faces a landscaped forecourt and street. At most one exists on a map, and the Kassel scenario includes it. It adapts the **left office building** from the supplied Blender source, completes its unfinished elevations, and places the original wordmark high on the front facade. Its menu entry is hidden until discovered in the city menu. The isolated model preview returns to the existing city.
 
 See the [Easter Egg asset notes](public/assets/models/easter-egg-office-README.md) for source identity, modifications, technical budgets, and reproduction details. The original source remains unchanged. Inclusion of the original wordmark does not grant trademark rights.
 
@@ -87,10 +89,10 @@ Use Node.js **20.19+ on the Node 20 line, or 22.12+**, npm, and a desktop browse
 ```sh
 npm ci
 npm run build
-npm run preview -- --port 4173 --strictPort
+npm run preview
 ```
 
-Open [localhost:4173](http://127.0.0.1:4173/). Keep the terminal running while you play. For development with live updates:
+Open [localhost:4399](http://127.0.0.1:4399/). Keep the terminal running while you play. For development with live updates:
 
 ```sh
 npm run dev

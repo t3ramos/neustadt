@@ -18,6 +18,6 @@ export function renderNewCityView(awaitingStart: boolean) {
     <p class="modal-note">${tr('Zahl oder Wort – derselbe Seed erzeugt dieselbe Landschaft. Das großzügige, ebene Zentrum bleibt für deine ersten Viertel frei.', 'Number or word — the same seed creates the same landscape. The spacious, level center stays clear for your first neighborhoods.')}</p>
     <div class="new-city-options">
     <button id="new-empty" class="button primary">${icon('sprout')} ${tr('Eigene Stadt starten', 'Start your own city')}</button>
-    <button id="new-starter" class="button secondary">${icon('building-2')} ${tr('New York übernehmen', 'Take over New York')}</button>
+    <button id="new-starter" class="button secondary">${icon('building-2')} ${tr('Kassel übernehmen', 'Take over Kassel')}</button>
     </div>`;
 }

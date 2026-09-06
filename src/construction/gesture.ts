@@ -51,6 +51,7 @@ export class ConstructionStroke {
     readonly brush: number,
     readonly size: number,
     start: Point,
+    private readonly roadRoute?: (start: Point, end: Point) => Point[],
   ) {
     this.anchor = { ...start };
     this.endpoint = { ...start };
@@ -68,6 +69,8 @@ export class ConstructionStroke {
 
   get points(): Point[] {
     if (this.cachedPoints) return this.cachedPoints;
+    if (this.tool === 'road' && this.roadRoute)
+      return (this.cachedPoints = this.roadRoute(this.anchor, this.endpoint));
     if (!ZONE_TOOLS.has(this.tool)) return (this.cachedPoints = [...this.cells.values()]);
     const points: Point[] = [];
     const x0 = Math.max(0, Math.min(this.anchor.x, this.endpoint.x));
@@ -84,7 +87,7 @@ export class ConstructionStroke {
       FACILITY_TOOLS.has(this.tool)
     )
       return;
-    if (!ZONE_TOOLS.has(this.tool)) {
+    if (!ZONE_TOOLS.has(this.tool) && !(this.tool === 'road' && this.roadRoute)) {
       const from = this.endpoint,
         dx = point.x - from.x,
         dz = point.z - from.z;

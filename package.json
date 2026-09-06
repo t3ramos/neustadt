@@ -1,12 +1,12 @@
 {
   "name": "neustadt-3d",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite --host 127.0.0.1 --port 4399 --strictPort",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1 --port 4399 --strictPort",
     "test": "node tools/testing/run-tests.mjs",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write src tests tools package.json vite.config.ts index.html",
