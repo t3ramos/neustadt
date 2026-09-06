@@ -5,6 +5,7 @@ import {
   isBuildingAnchor, previewBuild, recalculate, repayLoan, serializeCity,
   takeLoan, tick, triggerDisaster,
 } from '../src/simulation.ts';
+import { getLocale, localizedEventMessage, localizedEventTitle, setLocale } from '../src/i18n.ts';
 import type { CitizenIncident, CityState, Point, Tile, Tool } from '../src/types.ts';
 
 const tileAt = (city: CityState, x: number, z: number): Tile => {
@@ -199,14 +200,85 @@ test('a road without a utility layer does not magically supply a distant buildin
   assert.equal(home.watered, false);
 });
 
-test('vacant zoning cannot substitute for power lines but adjacent developed buildings can conduct power', () => {
+test('one edge feed supplies a whole contiguous mixed zone block, including vacant lots', () => {
   const city = flatCity();
   construct(city, { x: 3, z: 3 }, 'power');
-  construct(city, line(7, 6, 20, 6), 'residential');
-  assert.equal(tileAt(city, 20, 6).powered, false, 'Drawing an empty zone must not install electricity for free');
-  for (let x = 7; x <= 20; x++) tileAt(city, x, 6).level = 1;
+  construct(city, line(8, 6, 20, 6), 'residential');
+  construct(city, line(8, 7, 20, 7), 'commercial');
+  construct(city, line(8, 8, 20, 8), 'industrial');
+  assert.equal(tileAt(city, 20, 8).powered, false, 'An isolated block still needs a grid connection');
+  construct(city, { x: 7, z: 6 }, 'powerline');
+  for (const point of line(8, 6, 20, 8)) assert.equal(tileAt(city, point.x, point.z).powered, true);
+  assert.equal(city.tiles.filter(tile => tile.hasPowerLine).length, 1, 'A block needs one feed, not one wire per lot');
+  for (let x = 8; x <= 20; x++) tileAt(city, x, 6).level = 4;
   recalculate(city);
   assert.equal(tileAt(city, 20, 6).powered, true);
+  construct(city, { x: 7, z: 6 }, 'bulldoze');
+  assert.equal(tileAt(city, 20, 6).powered, false, 'Removing the sole block feed disconnects it');
+});
+
+test('unwired roads separate blocks while an explicit power crossing supplies the far block', () => {
+  const city = flatCity();
+  construct(city, { x: 3, z: 3 }, 'power');
+  construct(city, line(7, 6, 10, 6), 'residential');
+  construct(city, line(11, 2, 11, 10), 'road');
+  construct(city, line(12, 6, 16, 6), 'residential');
+  assert.equal(tileAt(city, 10, 6).powered, true);
+  assert.equal(tileAt(city, 12, 6).powered, false, 'Electricity must not jump across asphalt by proximity');
+  assert.equal(tileAt(city, 16, 6).powered, false);
+  construct(city, { x: 11, z: 6 }, 'powerline');
+  assert.equal(tileAt(city, 16, 6).powered, true, 'A deliberately built crossing is valid infrastructure');
+  construct(city, { x: 11, z: 6 }, 'bulldoze');
+  assert.equal(tileAt(city, 12, 6).powered, false, 'Nor can power jump a vacant gap');
+});
+
+test('a large facility retains a legal short service drop but cannot draw a drop across a road', () => {
+  const city = flatCity();
+  construct(city, { x: 3, z: 3 }, 'power');
+  construct(city, line(7, 6, 15, 6), 'powerline');
+  construct(city, { x: 12, z: 8 }, 'police');
+  assert.equal(tileAt(city, 12, 8).powered, true, 'A clear one-tile gap is a legitimate facility service');
+  construct(city, line(9, 7, 17, 7), 'road');
+  assert.equal(tileAt(city, 12, 8).powered, false, 'A service drop may not cross the new street');
+  construct(city, { x: 12, z: 7 }, 'powerline');
+  assert.equal(tileAt(city, 12, 8).powered, true, 'Building the trunk across the street connects the facility');
+});
+
+test('a large facility service feed supplies its entire touching zone block', () => {
+  const city = flatCity();
+  construct(city, { x: 2, z: 8 }, 'wind');
+  construct(city, line(4, 8, 10, 8), 'powerline');
+  construct(city, { x: 12, z: 8 }, 'police');
+  construct(city, line(14, 8, 19, 8), 'residential');
+  assert.equal(tileAt(city, 12, 8).powered, true, 'The facility has a legal service over the free gap');
+  assert.equal(tileAt(city, 19, 8).powered, true, 'That service feeds the connected block, not just the facility');
+  assert.equal(city.stats.powerSupply, 1200, 'A service extends the grid without adding generator capacity');
+  construct(city, { x: 9, z: 8 }, 'bulldoze');
+  assert.equal(tileAt(city, 12, 8).powered, false);
+  assert.equal(tileAt(city, 19, 8).powered, false);
+});
+
+test('one edge feed powers isolated lots inside a closed city block without supplying the next block or wilderness', () => {
+  const city = flatCity();
+  construct(city, { x: 2, z: 9 }, 'power');
+  construct(city, [...line(8, 8, 18, 8), ...line(8, 13, 18, 13), ...line(8, 9, 8, 12), ...line(13, 9, 13, 12), ...line(18, 9, 18, 12)], 'road');
+  construct(city, [{ x: 10, z: 9 }, { x: 12, z: 12 }], 'residential');
+  construct(city, { x: 9, z: 11 }, 'commercial');
+  construct(city, { x: 16, z: 11 }, 'residential');
+  construct(city, { x: 30, z: 25 }, 'residential');
+  construct(city, [{ x: 10, z: 10 }, { x: 11, z: 11 }], 'tree');
+  const cityLayout = city.tiles.map(tile => [tile.kind, tile.level]);
+  construct(city, line(6, 10, 8, 10), 'powerline');
+  for (const [x, z] of [[10, 9], [12, 12], [9, 11]]) assert.equal(tileAt(city, x, z).powered, true, 'Gardens and vacant lots remain part of their enclosed block');
+  assert.equal(tileAt(city, 16, 11).powered, false, 'The intervening street keeps separate blocks electrically separate');
+  assert.equal(tileAt(city, 30, 25).powered, false, 'Open countryside does not become one enormous powered block');
+  assert.equal(city.tiles.filter(tile => tile.hasPowerLine).length, 3, 'No hidden migration or per-lot overhead lines are added');
+  assert.deepEqual(city.tiles.map(tile => [tile.kind, tile.level]), cityLayout);
+  const loaded = deserializeCity(serializeCity(city));
+  assert.equal(tileAt(loaded, 12, 12).powered, true);
+  assert.equal(tileAt(loaded, 16, 11).powered, false);
+  construct(city, { x: 13, z: 11 }, 'powerline');
+  assert.equal(tileAt(city, 16, 11).powered, true, 'An explicit street crossing feeds the neighboring block');
 });
 
 test('pipes and power lines coexist with streets and buildings without replacing their surface', () => {
@@ -788,4 +860,66 @@ test('the unlocked citizen interaction tool cannot paint or mutate construction 
   const result = build(city, [{ x: 15, z: 9 }, { x: 16, z: 9 }], 'citizen');
   assert.equal(result.ok, false);
   assert.equal(JSON.stringify(city), before);
+});
+
+
+test('tool definitions and immediate construction results follow locale changes without re-importing modules', () => {
+  const previous = getLocale();
+  try {
+    const definition = TOOL_DEFS.powerline!;
+    setLocale('de');
+    assert.equal(definition.name, 'Stromleitung');
+    assert.match(definition.description, /von Straßen umschlossenen Blocks/);
+    const city = flatCity();
+    assert.match(previewBuild(city, [{ x: -1, z: 5 }], 'road').message, /Außerhalb/);
+    setLocale('en');
+    assert.equal(definition.name, 'Power line');
+    assert.match(definition.description, /enclosed street block/);
+    assert.equal(previewBuild(city, [{ x: -1, z: 5 }], 'road').message, 'Outside the city limits.');
+    assert.match(build(city, [{ x: 10, z: 10 }], 'road').message, /tile built/);
+    assert.match(takeLoan(city).message, /Borrowed €10,000/);
+    assert.match(repayLoan(city).message, /Repaid €10,000/);
+    setLocale('de');
+    assert.equal(definition.name, 'Stromleitung');
+  } finally { setLocale(previous); }
+});
+
+test('simulation events preserve German and English text through saves and locale switches', () => {
+  const previous = getLocale();
+  try {
+    setLocale('en');
+    const city = flatCity();
+    takeLoan(city);
+    const event = city.events.find(event => event.title === 'Kredit ausgezahlt')!;
+    assert.ok(event);
+    assert.equal(event.titleEn, 'Loan paid out');
+    assert.match(event.message, /10.000 €/);
+    assert.match(event.messageEn!, /€10,000/);
+    const loaded = deserializeCity(serializeCity(city));
+    const loadedEvent = loaded.events.find(candidate => candidate.id === event.id)!;
+    assert.equal(localizedEventTitle(loadedEvent), 'Loan paid out');
+    assert.match(localizedEventMessage(loadedEvent), /Monthly interest: 0.5%/);
+    setLocale('de');
+    assert.equal(localizedEventTitle(loadedEvent), 'Kredit ausgezahlt');
+    assert.match(localizedEventMessage(loadedEvent), /Monatlicher Zins: 0,5 %/);
+  } finally { setLocale(previous); }
+});
+
+test('save errors use the current locale and optional English event fields are strictly validated', () => {
+  const previous = getLocale();
+  try {
+    const raw = JSON.parse(serializeCity(flatCity()));
+    setLocale('en');
+    assert.throws(() => deserializeCity('broken json'), /saved game does not contain valid JSON/);
+    raw.events[0].titleEn = 42;
+    assert.throws(() => deserializeCity(JSON.stringify(raw)), /English event title/);
+    raw.events[0].titleEn = 'Valid'; raw.events[0].messageEn = [];
+    assert.throws(() => deserializeCity(JSON.stringify(raw)), /English event message/);
+    delete raw.events[0].titleEn; delete raw.events[0].messageEn;
+    assert.doesNotThrow(() => deserializeCity(JSON.stringify(raw)), 'Older monolingual events remain importable');
+    raw.money = 'invalid';
+    assert.throws(() => deserializeCity(JSON.stringify(raw)), /Invalid saved game: Treasury/);
+    setLocale('de');
+    assert.throws(() => deserializeCity(JSON.stringify(raw)), /Ungültiger Spielstand: Stadtkasse/);
+  } finally { setLocale(previous); }
 });

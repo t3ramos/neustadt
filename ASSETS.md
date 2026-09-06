@@ -25,26 +25,34 @@ Color palette: sage green, warm cream, terracotta, slate navy, turquoise water, 
 Constraints: completely original architecture and composition; no text, letters, logos, UI, brand references, watermark, photorealistic people closeups, existing game characters or copied copyrighted game assets.
 ```
 
-## Prozedurale Spielassets · Aktueller Grafikstand
+## Procedural game assets
 
-Die 3D-Spielassets sind eigener Projektcode. Sie werden beim Start aus Geometrie, Farben, Materialien und deterministischen Varianten aufgebaut; es werden keine Modelle oder Texturen aus SimCity 2000 übernommen.
+The playable 3D assets are original project code. Geometry, colors, materials, and deterministic variants are assembled locally at startup. No models or textures from SimCity 2000 are used.
 
-- **Gebäude und Anlagen:** die ursprünglichen eigenen Wohnhäuser, Doppelhäuser, kompakten Mehrfamilienhäuser, blauen Gewerbehochhäuser mit Manhattan-Silhouette und Fabriken mit Sägezahndächern. Die großen zusammenhängenden Modelle für Kraftwerk, Wasserwerk, Polizei, Feuerwehr, Klinik, Schule, Universität, Recyclinghof, Stadion, Flughafen und Hafen bleiben erhalten. Stadionbetrieb, Flugbewegungen und weitere Anlagendetails besitzen eigene Animationen.
-- **Gebäudestil und Fenster:** solide stilisierte Baukörper mit eigenen Fassaden, Dachdetails und opaken Fenstermaterialien. Fenster- und Gebäudelichter lassen sich unabhängig von der Tageszeit ein- und ausschalten. Die Modelle bilden auch die Grundlage der Kollisionsflächen für Bewohner und Fahrzeuge.
-- **Landschaft und Straßen:** persistierte Geländehöhen, Küsten und Hügel, ein eigenes wiederholbares Grasmaterial mit Farb-, Normalen- und Rauheitskarten sowie höhenangepasste Straßen und Brücken. Die Materialkarten werden lokal erzeugt.
-- **Licht und Wetter:** prozeduraler Himmel mit Sonne und Mond, Tag-Nacht-Beleuchtung, weiche stabilisierte Echtzeitschatten, Materialreflexionen der Himmelsumgebung, eigene Wasser- und Regenoberflächen, Pfützengeometrie und Regentropfen. Straßenlaternen besitzen eigene Leuchtkörper, weiche Lichtflächen auf dem Straßenbelag und eine begrenzte Zahl echter Lichtquellen in Kameranähe.
-- **Fahrzeuge:** eigene Limousinen, Taxis mit Dachzeichen und Karoband, geschlossene Lieferwagen und sechsrädrige Pritschenlastwagen mit separater Kabine und Ladegut. Modellierte Details umfassen geformte Motorhauben, Dächer und Kotflügel, echte Radausschnitte, schräge Frontscheiben, profilierte Reifen, Felgen und Speichen, Spiegel, Scheibenwischer, Kühlergrill, Stoßfänger und Leuchten. Lack und opake Fenster verwenden eigene Materialeinstellungen. Auch die Boote sind eigene Modelle.
-- **Bewohner:** maßstäblich kleine erwachsene Figuren mit gerundeten Köpfen, Gliedmaßen, Händen, Schuhen, Haaren und Rucksäcken, modellierten Gesichtsdetails und Varianten für Haut, Kleidung und Accessoires. Geh- und Aufstehanimationen, Gehweg- und Querungsrouting, Greifinteraktion und das kleine Handsymbol sind eigener Code. Die Gelenk- und Kollisionsphysik der Ragdolls verwendet `cannon-es`. Aufprallpartikel und Flecken werden prozedural erzeugt.
-- **Dialoge:** über 450 eigene deutsche Textzeilen für Situationen und beobachtete Ereignisse. Themenauswahl, Sprechblasen und die Auswahl ohne erneute Verwendung einer Zeile vor dem Durchlaufen des jeweiligen Themenvorrats einer Figur werden lokal berechnet. Es werden dafür keine Sprachmodelle oder externen Dienste aufgerufen.
-- **Tiere:** eigene kleine Katzen-, Hunde-, Reh- und Kaninchenmodelle aus gemeinsam genutzter Geometrie, mit passenden Proportionen, Laufbewegungen und Lebensräumen.
-- **Bauinteraktion:** eigene Bauflächenvorschau, Konturen und Werkzeugmarkierungen. Interface-Symbole stammen aus Lucide; deren Lizenz ist separat enthalten.
+- **Buildings and facilities:** original houses, duplexes, compact apartment blocks, blue commercial high-rises with Manhattan-inspired silhouettes, and sawtooth-roof factories. Large continuous models cover the power plant, waterworks, police and fire stations, clinic, school, university, recycling center, stadium, airport, and seaport. Stadium activity, aircraft movements, and other facility details have original animations.
+- **Building style and windows:** solid stylized structures with original facades, roof details, and opaque window materials. Building and window lights can be switched independently of the time of day. Building geometry also supplies collision bounds for residents and vehicles.
+- **Terrain and roads:** saved terrain heights, coasts and hills, original repeatable grass materials with color, normal, and roughness maps, and roads and bridges that follow terrain elevation. Material maps are generated locally.
+- **Utility structures:** original electricity poles and overhead spans. Connected residential, commercial, and industrial blocks share power without individual house cables. Visible service connections are reserved for large multi-tile facilities and are routed to the lot boundary without crossing roadways or other buildings.
+- **Lighting and weather:** a procedural sky with sun and moon, day–night lighting, soft stabilized real-time shadows, sky-environment material reflections, original water and rain surfaces, puddle geometry, and raindrops. Streetlights have original fixtures, soft light pools on the road, and a limited number of actual lights near the camera.
+- **Fire effects:** original animated flame geometry, warm glow, rising smoke, and drifting embers mark burning sites. These effects are generated locally in the renderer.
+- **Vehicles:** original sedans, taxis with roof signs and checker bands, enclosed delivery vans, and six-wheeled flatbed trucks with separate cabs and cargo. Modeled details include shaped hoods, roofs and fenders, wheel openings, sloping windscreens, tire tread, rims and spokes, mirrors, wipers, grilles, bumpers, and lights. Paint and opaque windows use original material settings. Boats are original models too.
+- **Residents:** small adult figures with rounded heads, limbs, hands, shoes, hair and backpacks, modeled facial details, and variations in skin, clothing, and accessories. Walking and recovery animations, sidewalk and crossing routing, grab interaction, and the hand marker are original code. Ragdoll joint and collision physics use `cannon-es`. Impact particles and stains are procedural.
+- **Dialogue and localization:** 494 original situation and event lines, each provided in German and English. Topic selection, speech bubbles, and per-resident selection without repeating a line before cycling through a topic are computed locally. Interface, help, notifications, quest, and challenge translations are maintained in the source. Dialogue and translation do not call language models or external services at runtime.
+- **Animals:** original small cat, dog, deer, and rabbit models built from shared geometry, with species-specific proportions, movement, and habitats.
+- **Construction interaction:** original building-footprint previews, outlines, and tool markers. Interface icons come from Lucide and retain their separate license.
 
-Das Titelmotiv oben ist das vorhandene ImageGen-Asset. Für die Erweiterungen wurden die spielbaren Geometrien und Materialien im Code erstellt. Es wurden keine zusätzlichen Rasterbilder generiert.
+The cover above is the existing ImageGen artwork. Later gameplay assets were created as code-based geometry and materials; no additional raster images were generated for those features.
 
-## Bibliotheken und Schriftarten
+## Libraries and fonts
 
-Die aktuelle Echtzeitdarstellung verwendet **Three.js**. **cannon-es** liefert die Ragdoll-Physik. Die Oberfläche verwendet **Lucide**, **DM Sans** und **Manrope**. Diese Komponenten sind externe Bibliotheken bzw. Schriftarten; sie sind nicht als eigene Assets ausgewiesen.
+The current renderer uses **Three.js**. **cannon-es** provides ragdoll physics. The interface uses **Lucide**, **DM Sans**, and **Manrope**. These are third-party libraries and fonts, not original project assets.
 
-Der frühere Raytracing-Modus gehört nicht mehr zum laufenden Spiel. **three-mesh-bvh**, **three-gpu-pathtracer** und der dort verwendete **glslSmartDeNoise**-Shader bleiben vorerst als historische Quell- bzw. Testabhängigkeiten samt Lizenztexten im Projekt erhalten; sie werden von der aktuellen Spielgrafik nicht verwendet.
+The former ray-tracing mode is not part of the running game. **three-mesh-bvh**, **three-gpu-pathtracer**, and its **glslSmartDeNoise** shader remain as historical source or test dependencies, with their license notices. The current game renderer does not use them.
 
-Schriftdateien und alle zur Laufzeit benötigten Spielassets werden aus dem Projekt ausgeliefert. Die jeweiligen Lizenztexte befinden sich unter [`public/licenses/`](public/licenses/); Lizenzangaben der übrigen Entwicklungsabhängigkeiten liegen außerdem in den installierten Paketen. Der vollständige Abhängigkeitsstand ist in `package-lock.json` festgehalten.
+Fonts and all required runtime game assets are served from the project. License notices are in [`public/licenses/`](public/licenses/); installed packages also contain the notices for development dependencies. `package-lock.json` records the dependency versions.
+
+## Licensing
+
+Original game source, procedural asset code, materials, dialogue, translations, and cover artwork are made available under the repository's [MIT License](LICENSE), Copyright 2026 t3ramos, to the extent the contributor holds rights in them. The cover's provenance is AI-generated artwork as described above; no exclusive ownership or copyright protection of generated output is asserted.
+
+Third-party components retain their own licenses. The MIT license for NEUSTADT does not replace the notices for Three.js, cannon-es, Lucide, the bundled fonts, or the historical graphics dependencies. Keep the applicable notices when redistributing source or a built game. The build copies `public/licenses/` into the website package, including `neustadt.txt`, an exact copy of the root MIT `LICENSE`. The release ZIP additionally includes `LICENSE` at its root.

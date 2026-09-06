@@ -69,3 +69,17 @@ body.driving .drive-hud { bottom:30px; }
 
 .drive-hud.is-drifting { border-color: #e4ba6b; }
 .drive-hud.is-drifting #drive-status { color: #f0ce8a; }
+
+/* Language controls remain available during play and inside dialogs. */
+.language-control { display:flex;align-items:center;gap:3px;flex-shrink:0;border:1px solid #d4dfcd;border-radius:7px;padding:3px 4px;background:#edf2e5;color:#456349; }
+.language-control>svg { width:15px;height:15px; }
+.language-control select { border:0;background:transparent;color:inherit;font:inherit;font-size:11px;font-weight:700;cursor:pointer;padding:5px 2px;min-width:43px; }
+.language-control:focus-within { outline:2px solid #668e70;outline-offset:2px; }
+.modal-header-actions { display:flex;align-items:center;gap:12px; }
+@media(max-width:700px) { .topbar .language-control { gap:0;padding:2px; }.topbar .language-control>svg { display:none; }.topbar .language-control select { min-width:36px;font-size:10px; }.modal-header-actions { gap:5px; } }
+@media(max-width:440px) {
+  .topbar { gap:6px; }
+  .top-actions { padding-left:0;gap:1px; }
+  .topbar .language-control select { width:30px;min-width:30px; }
+  .top-actions .icon-btn { width:23px; }
+}

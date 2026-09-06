@@ -4,6 +4,7 @@ import { getPowerLayout, powerLayoutSignature, type PowerLayout } from '../src/p
 import { createCity, getFootprint, recalculate, TOOL_DEFS } from '../src/simulation.ts';
 import { sampleGroundHeight } from '../src/terrain-graphics.ts';
 import { sampleRoadHeight } from '../src/road-graphics.ts';
+import { powerServiceCandidates } from '../src/power-service.ts';
 import type { CityState, Tile, TileKind } from '../src/types.ts';
 
 function city(): CityState {
@@ -80,30 +81,32 @@ test('removed wire cells and developed building footprints break overhead spans 
   assert.ok(!layout.spans.some(span => span.path.includes(10 * state.size + 6)));
 });
 
-test('live source and developed lots get one local drop, while empty zoning and dead components do not', () => {
+test('only large live facilities get service drops; ordinary lots and highrises share block supply without meters', () => {
   const state = city(), source = building(state, 2, 2, 'power');
   for (let x = 6; x <= 15; x++) wire(state, x, 4);
-  const home = building(state, 10, 6);
-  const emptyZone = at(state, 13, 6); emptyZone.kind = 'commercial';
-  const deadHome = building(state, 25, 20); wire(state, 25, 18);
+  const home = building(state, 10, 5); home.level = 4;
+  const facility = building(state, 12, 5, 'police');
+  const emptyZone = at(state, 11, 5); emptyZone.kind = 'commercial';
+  const deadHome = building(state, 25, 20, 'police'); wire(state, 25, 18);
   recalculate(state);
   assert.ok(home.powered);
   assert.equal(deadHome.powered, false);
   const layout = getPowerLayout(state), ids = layout.services.map(service => service.building);
   assert.ok(ids.includes(idOf(state, source)), 'The generating facility exports to the wired network');
-  assert.ok(ids.includes(idOf(state, home)));
+  assert.ok(ids.includes(idOf(state, facility)));
+  assert.ok(!ids.includes(idOf(state, home)), 'Even a fully developed highrise has no individual drop');
   assert.ok(!ids.includes(idOf(state, emptyZone)));
   assert.ok(!ids.includes(idOf(state, deadHome)));
   assert.equal(new Set(ids).size, ids.length, 'Footprint followers must never create duplicate service cables');
   assert.ok(layout.services.every(service => layout.poles.some(pole => pole.id === service.pole)));
 });
 
-test('service uses the highest-supply component selected by simulation, not a closer dead wire', () => {
+test('large facility uses a legal supplied nearby line instead of a closer dead wire', () => {
   const state = city();
   building(state, 2, 2, 'wind');
   for (let x = 4; x <= 11; x++) wire(state, x, 3);
-  const home = building(state, 11, 5);
-  const dead = wire(state, 12, 5);
+  const home = building(state, 11, 5, 'police');
+  const dead = wire(state, 10, 5);
   recalculate(state);
   assert.ok(home.powered);
   const service = getPowerLayout(state).services.find(item => item.building === idOf(state, home));
@@ -115,7 +118,7 @@ test('service uses the highest-supply component selected by simulation, not a cl
 test('source destruction and conductor fires remove false service connections immediately', () => {
   const state = city(), source = building(state, 2, 2, 'wind');
   for (let x = 4; x <= 14; x++) wire(state, x, 3);
-  const home = building(state, 14, 5);
+  const home = building(state, 14, 4, 'police');
   recalculate(state);
   assert.ok(getPowerLayout(state).services.some(service => service.building === idOf(state, home)));
   at(state, 8, 3).fire = 1;
@@ -134,11 +137,12 @@ test('back-row buildings keep simulated electricity but do not get cables throug
   const state = city();
   building(state, 2, 2, 'wind');
   for (let x = 4; x <= 14; x++) wire(state, x, 3);
-  const front = building(state, 11, 4), back = building(state, 11, 5);
+  const front = building(state, 11, 4), back = building(state, 11, 5, 'police');
+  building(state, 12, 4);
   recalculate(state);
   assert.ok(front.powered && back.powered, 'Developed buildings really conduct through each other');
   const layout = getPowerLayout(state);
-  assert.ok(layout.services.some(service => service.building === idOf(state, front)));
+  assert.ok(!layout.services.some(service => service.building === idOf(state, front)), 'The front ordinary lot has no service cable either');
   assert.ok(!layout.services.some(service => service.building === idOf(state, back)), 'No visual cable should cut through the front roof');
 });
 
@@ -146,7 +150,7 @@ test('drop obstruction uses the physical curb pole position instead of the cente
   const state = city();
   building(state, 3, 5, 'wind');
   wire(state, 5, 5, 'road');
-  const destination = building(state, 6, 4);
+  const destination = building(state, 6, 3, 'police');
   const blockingLot = building(state, 6, 5);
   recalculate(state);
   assert.ok(destination.powered);
@@ -180,6 +184,115 @@ test('all large facilities and rotations use a single nearest footprint-edge ter
     assert.ok(service.targetX >= facility.x && service.targetX < maxX + 1);
     assert.ok(service.targetZ >= facility.z && service.targetZ < maxZ + 1);
   }
+});
+
+test('a dense zoned block needs no individual house cables, including empty plots and highrises', () => {
+  const state = city();
+  building(state, 2, 8, 'power');
+  for (let x = 6; x <= 12; x++) wire(state, x, 10);
+  for (let z = 11; z <= 18; z++) for (let x = 10; x <= 20; x++) {
+    const lot = building(state, x, z, (x + z) % 2 ? 'residential' : 'commercial');
+    lot.level = (x + z) % 5;
+  }
+  const clinic = building(state, 13, 8, 'hospital');
+  recalculate(state);
+  const layout = getPowerLayout(state);
+  assert.ok(at(state, 20, 18).powered, 'One line touches and supplies the entire contiguous block');
+  assert.equal(layout.services.length, 2, 'Only the power plant and clinic receive visible service connections');
+  assert.ok(layout.services.some(service => service.building === idOf(state, clinic)));
+  assert.ok(layout.services.every(service => !!TOOL_DEFS[state.tiles[service.building].kind]?.footprint));
+});
+
+test('roadside service drops stay on their own curb and never cross the starting road asphalt', () => {
+  for (const [axis, destinationX, destinationZ, allowed] of [
+    ['vertical', 8, 10, false], ['vertical', 11, 10, true],
+    ['horizontal', 10, 8, false], ['horizontal', 10, 11, true],
+  ] as const) {
+    const state = city(), pole = wire(state, 10, 10, 'road');
+    if (axis === 'vertical') { at(state, 10, 9).kind = 'road'; at(state, 10, 11).kind = 'road'; }
+    else { at(state, 9, 10).kind = 'road'; at(state, 11, 10).kind = 'road'; }
+    const destination = building(state, destinationX, destinationZ, 'police');
+    const candidates = powerServiceCandidates(state, getFootprint(state, destination), tile => !!TOOL_DEFS[tile.kind]?.footprint);
+    assert.equal(candidates.some(candidate => candidate.pole === idOf(state, pole)), allowed, `${axis} road, facility ${destinationX},${destinationZ}`);
+  }
+});
+
+test('unwired roads block automatic facility drops but explicit trunk crossings remain visible', () => {
+  const state = city();
+  building(state, 6, 10, 'wind');
+  wire(state, 8, 10);
+  at(state, 9, 10).kind = 'road';
+  const destination = building(state, 10, 10, 'police');
+  recalculate(state);
+  assert.ok(!getPowerLayout(state).services.some(service => service.building === idOf(state, destination)));
+  assert.equal(destination.powered, false);
+  wire(state, 9, 10, 'road');
+  recalculate(state);
+  const connected = getPowerLayout(state);
+  assert.ok(destination.powered);
+  assert.ok(connected.services.some(service => service.building === idOf(state, destination)));
+  assert.ok(connected.spans.some(span => span.path.includes(10 * state.size + 8) && span.path.includes(10 * state.size + 9)), 'The player-placed trunk can cross a road');
+});
+
+test('one legal facility drop feeds the touching residential block and preserves its real incoming cable', () => {
+  const state = city();
+  building(state, 2, 8, 'wind');
+  for (let x = 4; x <= 10; x++) wire(state, x, 8);
+  const facility = building(state, 12, 8, 'police');
+  const home = building(state, 14, 8);
+  const localPole = wire(state, 14, 9);
+  recalculate(state);
+  assert.ok(facility.powered && home.powered, 'The legal service supplies the whole attached building block');
+  assert.ok(localPole.powered, 'An existing wire inside that block also receives its supply');
+  const incoming = getPowerLayout(state).services.find(service => service.building === idOf(state, facility));
+  assert.ok(incoming);
+  assert.equal(incoming.pole, 8 * state.size + 10, 'The real incoming cable must not switch to the closer, formerly dead local pole');
+  at(state, 11, 8).kind = 'road';
+  recalculate(state);
+  assert.equal(home.powered, false, 'A road across the sole service disconnects the entire block');
+  assert.ok(!getPowerLayout(state).services.some(service => service.building === idOf(state, facility)));
+});
+
+test('facility feeds can supply another isolated facility block through a short legal second service', () => {
+  const state = city();
+  building(state, 2, 8, 'wind');
+  for (let x = 4; x <= 10; x++) wire(state, x, 8);
+  const first = building(state, 12, 8, 'police');
+  wire(state, 14, 9);
+  const second = building(state, 16, 8, 'waterpump');
+  const home = building(state, 18, 8);
+  recalculate(state);
+  assert.ok(first.powered && second.powered && home.powered);
+  const layout = getPowerLayout(state);
+  assert.equal(layout.services.find(service => service.building === idOf(state, first))?.pole, 8 * state.size + 10);
+  assert.equal(layout.services.find(service => service.building === idOf(state, second))?.pole, 9 * state.size + 14);
+});
+
+test('enclosed urban gardens share the supply graph and remote boundary edits invalidate the layout', () => {
+  const state = city();
+  for (let x = 8; x <= 18; x++) { at(state, x, 8).kind = 'road'; at(state, x, 16).kind = 'road'; }
+  for (let z = 8; z <= 16; z++) { at(state, 8, z).kind = 'road'; at(state, 18, z).kind = 'rail'; }
+  building(state, 4, 10, 'wind');
+  wire(state, 6, 10); wire(state, 7, 10); wire(state, 8, 10, 'road');
+  const facility = building(state, 10, 10, 'police');
+  const homes = [[15, 12], [13, 14], [10, 14], [16, 10]].map(([x, z]) => building(state, x, z));
+  recalculate(state);
+  assert.ok(homes.every(home => home.powered) && facility.powered, 'The enclosed city block includes four isolated lots and their interior gardens');
+  const layout = getPowerLayout(state);
+  assert.ok(layout.services.some(service => service.building === idOf(state, facility)));
+  assert.ok(layout.services.every(service => !!TOOL_DEFS[state.tiles[service.building].kind]?.footprint), 'The isolated ordinary lots need no visible drop');
+  const signature = powerLayoutSignature(state);
+  at(state, 18, 15).kind = 'empty';
+  recalculate(state);
+  assert.notEqual(powerLayoutSignature(state), signature, 'A remote railway opening changes block reachability');
+  assert.ok(homes.every(home => !home.powered), 'The open countryside uses touching lots instead of an unbounded land block');
+});
+
+test('vacant zoned lots conduct a block but never become candidate service poles for a facility', () => {
+  const state = city();
+  const destination = building(state, 10, 10, 'police');
+  wire(state, 9, 10, 'residential');
+  assert.deepEqual(powerServiceCandidates(state, getFootprint(state, destination), tile => !!TOOL_DEFS[tile.kind]?.footprint), []);
 });
 
 test('sources export to their own component rather than a stronger disconnected nearby network', () => {
@@ -225,6 +338,7 @@ test('layout cache ignores time and money but tracks supply, development, fire, 
     () => { line.hasPowerLine = true; },
     () => { at(state, 5, 4).elevation += .5; },
     () => { at(state, 2, 2).kind = 'solar'; },
+    () => { at(state, 5, 5).kind = 'road'; },
   ]) {
     mutate();
     const next = powerLayoutSignature(state);

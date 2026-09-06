@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { afterEach, beforeEach } from 'node:test';
 import type { CityState, Tile } from '../src/types.ts';
+import { localizedEventMessage, localizedEventTitle, setLocale } from '../src/i18n.ts';
 import {
   CHALLENGES, QUESTS, RANKS, claimQuest, createProgression, getCampaignProgress,
   getChallengeProgress, getQuestProgress, getRank, isToolUnlocked, recordBuild,
   startChallenge, updateProgression, normalizeProgression,
 } from '../src/progression.ts';
+
+beforeEach(()=>setLocale('de'));
+afterEach(()=>setLocale('de'));
 
 function fixture(population=0):CityState {
   const state:CityState={
@@ -329,4 +333,99 @@ test('earlier seven-rank saves migrate to three stages by population while retai
   state.stats.population=100;
   normalizeProgression(state);
   assert.equal(state.progression.rank,1,'Migration runs once and later population loss preserves the new stage');
+});
+
+test('all progression definitions switch language without changing IDs, unlocks or earned progress',()=>{
+  const state=fixture(6000);
+  state.progression.claimedQuests.push('first-roads');
+  const savedProgression=JSON.stringify(state.progression);
+  const definitions=[...RANKS,...QUESTS,...CHALLENGES];
+  const before=definitions.map(item=>({id:item.id,name:item.name,description:item.description}));
+  const unlocks=RANKS.map(item=>[...item.unlocks]);
+  setLocale('en');
+  assert.equal(getRank(state).name,'City');
+  assert.equal(QUESTS[0].name,'New Connections');
+  assert.equal(CHALLENGES[0].name,'Metropolitan Growth');
+  for (const [index,definition] of definitions.entries()) {
+    assert.equal(definition.id,before[index].id);
+    assert.equal(definition.name,definition.nameEn);
+    assert.equal(definition.description,definition.descriptionEn);
+    assert.notEqual(definition.name,before[index].name);
+    assert.notEqual(definition.description,before[index].description);
+  }
+  assert.deepEqual(RANKS.map(item=>item.unlocks),unlocks);
+  assert.equal(JSON.stringify(state.progression),savedProgression);
+  setLocale('de');
+  assert.deepEqual(definitions.map(item=>({id:item.id,name:item.name,description:item.description})),before);
+});
+
+test('quest progress, errors, rewards and saved journal events follow the selected language',()=>{
+  const state=fixture(1500);
+  setLocale('en');
+  assert.equal(getQuestProgress(state,'new-homes').label,'Residential tiles 0/12 · Residents 1,500/500');
+  assert.equal(getQuestProgress(state,'utility-network').label,'Pipes 0/8 · Power lines 0/8');
+  assert.equal(getQuestProgress(state,'urban-nature').label,'Parks 0/15 · Trees 0/25');
+  assert.equal(getQuestProgress(state,'missing').label,'Unknown quest');
+  assert.equal(claimQuest(state,'missing').message,'This quest does not exist.');
+  assert.match(claimQuest(state,'first-roads').message,/requirements.*not been met/);
+  recordBuild(state,'road',10);
+  updateProgression(state);
+  const completed=state.events.find(event=>event.title==='Auftrag abgeschlossen')!;
+  assert.equal(localizedEventTitle(completed),'Quest completed');
+  assert.match(localizedEventMessage(completed),/New Connections.*€1,500.*100 XP/);
+  assert.match(completed.message,/Neue Verbindungen.*1\.500 €.*100 EP/);
+  const reward=claimQuest(state,'first-roads');
+  assert.equal(reward.message,'New Connections: +€1,500 and +100 XP.');
+  assert.equal(claimQuest(state,'first-roads').message,'This reward has already been claimed.');
+  const loaded=JSON.parse(JSON.stringify(state)) as CityState;
+  assert.equal(localizedEventTitle(loaded.events[0]),'Reward received');
+  assert.equal(localizedEventMessage(loaded.events[0]),reward.message);
+  setLocale('de');
+  assert.equal(localizedEventTitle(loaded.events[0]),'Belohnung erhalten');
+  assert.equal(localizedEventMessage(loaded.events[0]),'Neue Verbindungen: +1.500 € und +100 EP.');
+  assert.equal(getQuestProgress(loaded,'new-homes').label,'Wohnflächen 0/12 · Einwohner 1.500/500');
+});
+
+test('English challenge lifecycle retains bilingual journal text when saved and switched back',()=>{
+  const state=fixture(2000);
+  setLocale('en');
+  assert.equal(startChallenge(state,'missing').message,'This challenge does not exist.');
+  assert.match(startChallenge(state,'growth-spurt').message,/Metropolitan Growth started.*60 months/);
+  assert.equal(startChallenge(state,'green-capital').message,'Finish your current challenge first.');
+  assert.equal(getChallengeProgress(state)?.label,'0 / 5,000 new residents');
+  state.stats.population=7000;
+  nextMonth(state);
+  assert.equal(getChallengeProgress(state)?.label,'Completed · Metropolitan Growth');
+  const completed=state.events.find(event=>event.title==='Challenge gemeistert')!;
+  assert.equal(localizedEventTitle(completed),'Challenge completed');
+  assert.match(localizedEventMessage(completed),/Metropolitan Growth: \+€20,000 and \+1,200 XP/);
+  assert.equal(startChallenge(state,'growth-spurt').message,'You have already completed this challenge.');
+  startChallenge(state,'treasury-builder');
+  state.progression.counters.loansTaken++;
+  nextMonth(state);
+  assert.match(getChallengeProgress(state)!.label,/Not completed.*€150,000.*no new loans/);
+  const ended=state.events.find(event=>event.title==='Challenge beendet')!;
+  assert.match(localizedEventMessage(ended),/new loan ended “Golden Treasury”/);
+  setLocale('de');
+  assert.match(localizedEventMessage(completed),/Aufbruch in die Metropole.*20\.000 €.*1\.200 EP/);
+  assert.match(localizedEventMessage(ended),/Ein neuer Kredit hat „Goldene Stadtkasse“ beendet/);
+});
+
+test('English stage and campaign achievements preserve canonical German events and stable victory',()=>{
+  const state=fixture();
+  setLocale('en');
+  state.stats.population=25000;
+  nextMonth(state);
+  const rankEvent=state.events.find(event=>event.title.startsWith('Ausbaustufe erreicht:'))!;
+  assert.equal(localizedEventTitle(rankEvent),'Development stage reached: Metropolis');
+  assert.match(localizedEventMessage(rankEvent),/^15,000 residents reached/);
+  assert.deepEqual(getCampaignProgress(state).requirements.map(item=>item.label),['Residents','Happiness','Education','Health','Months meeting all targets with a positive budget']);
+  for (let month=0;month<5;month++) nextMonth(state);
+  const victory=state.events.find(event=>event.title.startsWith('Stadtziel erreicht'))!;
+  assert.match(localizedEventMessage(victory),/Teststadt has maintained at least 25,000 residents/);
+  assert.equal(getCampaignProgress(state).label,'City goal completed · Free play');
+  setLocale('de');
+  assert.equal(getCampaignProgress(state).label,'Stadtziel gemeistert · Freies Spiel');
+  assert.match(localizedEventMessage(victory),/^Teststadt hat sechs Monate lang mindestens 25\.000 Einwohner/);
+  assert.equal(state.progression.victory,true);
 });

@@ -1,14 +1,18 @@
-# NEUSTADT · Regionen & Stadtleben
+# NEUSTADT · Regions & City Life
 
-Privates Quellcode-Repository: [t3ramos/neustadt](https://github.com/t3ramos/neustadt). Veröffentlichungen stehen unter [Releases](https://github.com/t3ramos/neustadt/releases). Hinweise zu Webpaket, Hosting und Spielstandübernahme: [Releases und Hosting](docs/RELEASING.md).
+**English** · [Deutsch](README.de.md)
 
-Eine spielbare 3D-Stadtsimulation mit eigener Grafik, großen Regionen und einem Stadtziel. Erschließe hügeliges Land, verlege Versorgung, entwickle deine Kleinstadt in **drei Ausbaustufen zur Metropole** und erkunde die Straßen selbst am Steuer. NEUSTADT ist eine eigenständige, von klassischen Städtebauspielen wie SimCity 2000 inspirierte Umsetzung.
+An open-source game by [t3ramos](https://github.com/t3ramos). [Source code](https://github.com/t3ramos/neustadt) · [Releases](https://github.com/t3ramos/neustadt/releases) · [Releases and hosting](docs/RELEASING.md). Play in your browser: [t3ramos.github.io/neustadt](https://t3ramos.github.io/neustadt/).
 
-## Starten
+A playable 3D city-building simulation with original graphics, large regions, and a city-wide goal. Develop hilly land, build utility networks, grow a small town **through three stages into a metropolis**, and explore its streets behind the wheel. NEUSTADT is an independent game inspired by classic city builders such as SimCity 2000.
 
-Auf diesem Mac: **[Neustadt starten.command](<Neustadt starten.command>) doppelklicken**. Der Starter erstellt die aktuelle Produktionsfassung und öffnet **[NEUSTADT auf Port 4173](http://127.0.0.1:4173/)**. Er aktualisiert auch eine bereits laufende Fassung und erhält die benötigten Dateien noch geöffneter Spielfenster. Lade das Spiel neu, um den neuen Stand zu sehen. Das Terminal für den lokalen Server geöffnet lassen.
+## Getting started
 
-Benötigt werden **Node.js 20 ab 20.19 oder Node.js ab 22.12**, npm und ein Desktop-Browser mit aktiviertem **WebGL2**. Manuell starten:
+The complete game is available in **English and German**. Change language while playing; your choice is saved in the browser. Menus, building tools, help, notifications, quests, challenges, and all **494 NPC dialogue lines** are available in both languages. Changing language does not reset your city, and custom city names stay as you entered them.
+
+On macOS, double-click **[Neustadt starten.command](<Neustadt starten.command>)**. The launcher builds the current production version and opens **[NEUSTADT on port 4173](http://127.0.0.1:4173/)**. It also updates an already running version and preserves the files needed by game windows that remain open. Reload the game to see the update. Keep the server's terminal window open.
+
+You need **Node.js 20.19 or later on the Node 20 line, or Node.js 22.12 or later**, npm, and a desktop browser with **WebGL2** enabled. To start manually:
 
 ```sh
 npm ci
@@ -16,133 +20,139 @@ npm run build
 npm run preview -- --port 4173 --strictPort
 ```
 
-Für Entwicklung mit automatischer Aktualisierung:
+For development with automatic updates:
 
 ```sh
 npm run dev
 ```
 
-Öffne die im Terminal angezeigte Adresse. Der Build liegt in `dist/` und lässt sich über einen statischen Webserver ausliefern. Die Regeln für Simulation, Bau, Spielstände und weitere Spielsysteme prüfst du mit:
+Open the address printed in the terminal. The production build is in `dist/` and can be served by a static web server. Run the automated checks for simulation, construction, saves, and other game systems with:
 
 ```sh
 npm test
 ```
 
-Ein vorhandener Spielstand öffnet automatisch und pausiert. Ohne Spielstand beginnt das Spiel mit der Starterstadt **Lindenbucht**. Unter **Stadtmenü → Neue Stadt** kannst du Namen, Landschafts-Seed und eine Region mit **64 × 64**, **96 × 96** oder **128 × 128 Feldern** wählen. Standard ist 128 × 128: **16.384 Felder und gut zehnmal die Fläche der bisherigen 40er-Karte**. Starterstadt und freies Land beginnen jeweils mit **85.000 €**.
+An existing save opens automatically with the simulation paused. On your first visit, the game already creates **Lindenbucht**, a small playable starter town, so you can explore and build straight away. Use **City menu → New city** to choose **Begin with a starter city** for a fresh ready-made town or **Begin on open land** for an empty region. You can also set the name, terrain seed, and region size: **64 × 64**, **96 × 96**, or **128 × 128 tiles**. Starting either option replaces the active save, so export your current city first if you want to keep it. The default is 128 × 128: **16,384 tiles, more than ten times the area of the original 40-tile map**. Both the starter town and an undeveloped region begin with **€85,000**.
 
-## Bauen und versorgen
+## Construction and utilities
 
-1. **Straßen ziehen.** Grundstücke benötigen eine Straße innerhalb von zwei Feldern Abstand. Straßen folgen den Geländehöhen; über Wasser entstehen Brücken. Die Bauvorschau zeigt Baufläche, Kosten und Hindernisse, bevor du loslässt.
-2. **Strom und Wasser verlegen.** Straßen, Stromnetz und Wasserrohre sind eigenständige Netze. Verbinde das Kraftwerk mit Stromleitungen und das Wasserwerk mit Rohren. Beide Netze versorgen Grundstücke bis zwei Felder Abstand. Strom kann auch durch angrenzende bebaute Zonen und Anlagen weitergeleitet werden. Das Wasserwerk braucht selbst Strom. Leitungen dürfen unter Straßen und Gebäuden verlaufen; im Freiland sind Strommasten sichtbar. Die Datenansichten **Strom** und **Wasser** helfen beim Prüfen.
-3. **Gebiete ausweisen.** Wohnen schafft Einwohner, Gewerbe und Industrie schaffen Arbeitsplätze. Bei Nachfrage, Versorgung und ausreichender Zufriedenheit wachsen Gebäude selbstständig. Fehlende Versorgung kann zum Rückbau führen. Wohnhäuser, Mehrfamilienhäuser, Geschäfte, Hochhäuser und Fabriken machen den Ausbau sichtbar.
-4. **Lebensqualität sichern.** Parks, Polizei, Feuerwehr, Kliniken und Bildungseinrichtungen wirken in ihrer Umgebung. Industrie und fossile Kraftwerke belasten Nachbargrundstücke. Stadtdienste benötigen Straße, Strom und Wasser; ihre Budgets bestimmen die Wirkung.
-5. **Den Haushalt ausgleichen.** Steuern beeinflussen Einnahmen und Zufriedenheit. Polizeiwesen, Feuerwehr, Gesundheit und Bildung haben eigene Budgets. Kredite und Rückzahlungen erfolgen in Schritten von 10.000 €, bis maximal 50.000 € Kredit; der Monatszins beträgt 0,5 %.
+1. **Draw roads.** Lots need a road within two tiles. Roads follow the terrain, and roads over water become bridges. The preview shows the footprint, cost, and obstacles before you release the mouse.
+2. **Connect power and water.** Roads, electricity, and water pipes are separate networks. Connect the power plant with power lines and the waterworks with pipes. **One power connection serves a connected block:** residential, commercial, and industrial zones sharing tile edges pass electricity to each other, including zoned lots that have not developed yet. Ordinary zoned buildings need no individual overhead cables or service connections, including their high-rises. Roads and open gaps separate blocks unless you explicitly connect them with power lines. Only large facilities with multi-tile footprints can receive a visible dedicated service cable. It terminates at the lot boundary on the same side of the street and must not cross the roadway or another building. Water pipes supply lots within two tiles; the waterworks itself needs power. Explicitly placed utility lines can run beneath roads and buildings, with visible electricity poles in open land. Use the **Power** and **Water** overlays to check coverage.
+3. **Zone land.** Housing attracts residents; commerce and industry provide jobs. Buildings develop automatically when demand, utilities, and happiness are sufficient. Missing utilities can cause them to shrink. Houses, apartments, shops, high-rises, and factories show the city's growth.
+4. **Support quality of life.** Parks, police, fire stations, clinics, and education facilities serve their surroundings. Industry and fossil-fuel power plants pollute nearby lots. City services need roads, power, and water; their budgets determine their effectiveness.
+5. **Balance the budget.** Taxes affect income and happiness. Police, fire, health, and education have separate budgets. Borrow and repay in €10,000 steps, up to €50,000 of debt; monthly interest is 0.5%.
 
-Die Startversorgung liefert **6.000 Stromeinheiten je Kraftwerk** und **6.000 Wassereinheiten je versorgtem Wasserwerk**. Später liefern Windparks 1.200 und Solarparks 3.200 Stromeinheiten. Achte sowohl auf die Kapazität als auch auf durchgehende Verbindungen: Ein getrenntes Netz wird nicht durch ein Kraftwerk am anderen Ende der Karte versorgt.
+Basic utilities provide **6,000 power units per power plant** and **6,000 water units per supplied waterworks**. Later, wind farms provide 1,200 and solar farms 3,200 power units. Check capacity as well as continuous connections: a disconnected network is not supplied by a plant elsewhere on the map.
 
-Bei **1×** dauert ein Spielmonat etwa fünf Sekunden. **2×**, **3×** und Pause stehen in der unteren Leiste bereit. Dialoge und ein ausgeblendeter Browser-Tab pausieren die Simulation.
+At **1×**, a game month takes about five seconds. The bottom bar also offers **2×**, **3×**, and pause. Dialogs and a hidden browser tab pause the simulation.
 
-### Gelände und große Gebäude
+### Terrain and large facilities
 
-Unter **Gelände** kannst du freie Flächen in **5-Meter-Schritten anheben oder absenken**. **Einebnen** übernimmt die Höhe des zuerst angeklickten Felds für die bearbeitete Fläche. Die Kosten betragen **35 € je Feld und 5 Meter Höhenänderung**. Unter dem Meeresspiegel entsteht Wasser; Aufschütten schafft Land. Bebaute Flächen müssen vor einer Höhenänderung geräumt werden.
+Use **Terrain** tools to raise or lower undeveloped land in **5-meter steps**. **Level** uses the height of the first clicked tile for the area you edit. The cost is **€35 per tile for each 5-meter change**. Lowering land below sea level creates water; raising it creates land. Clear developed tiles before changing their height.
 
-Öffentliche Anlagen sind **einzelne Gebäude mit zusammenhängender Baufläche**. Sie benötigen eine freie, trockene und ebene Grundfläche. Mit **R** drehst du Gebäude und Baufläche. Ein Abriss entfernt die gesamte Anlage.
+Public facilities are **single buildings occupying continuous footprints**. They need an empty, dry, level site. Press **R** to rotate the building and footprint. Demolition removes the entire facility.
 
-| Anlage | Baufläche | Baukosten | Betrieb / Monat |
+| Facility | Footprint | Construction | Operation / month |
 | --- | ---: | ---: | ---: |
-| Kraftwerk | 4 × 4 | 6.500 € | 320 € |
-| Wasserwerk | 2 × 2 | 2.200 € | 180 € |
-| Polizeiwache | 2 × 2 | 1.900 € | 125 € |
-| Feuerwache | 3 × 2 | 1.600 € | 95 € |
-| Klinik | 3 × 3 | 3.200 € | 150 € |
-| Schule | 3 × 2 | 1.800 € | 100 € |
-| Stadion | 6 × 5 | 9.000 € | 180 € |
-| Hafen | 5 × 3 | 9.500 € | 160 € |
-| Universität | 5 × 4 | 12.000 € | 280 € |
-| Flughafen | 10 × 6 | 16.000 € | 290 € |
+| Power plant | 4 × 4 | €6,500 | €320 |
+| Waterworks | 2 × 2 | €2,200 | €180 |
+| Police station | 2 × 2 | €1,900 | €125 |
+| Fire station | 3 × 2 | €1,600 | €95 |
+| Clinic | 3 × 3 | €3,200 | €150 |
+| School | 3 × 2 | €1,800 | €100 |
+| Stadium | 6 × 5 | €9,000 | €180 |
+| Seaport | 5 × 3 | €9,500 | €160 |
+| University | 5 × 4 | €12,000 | €280 |
+| Airport | 10 × 6 | €16,000 | €290 |
 
-Die Preise gelten **pro Anlage**, die Betriebskosten der Stadtdienste bei 100 % Budget. Beim Hafen müssen mindestens **zwei Felder entlang seiner Kaimauer direkt ans Wasser grenzen**; mit R richtet sich die Wasserseite aus. Stadion, Flughafen und Hafen besitzen eigene Details und Animationen.
+Prices are **per facility**; service operating costs assume a 100% budget. A seaport needs at least **two tiles along its quay directly beside water**; press R to rotate the waterfront. The stadium, airport, and seaport have their own details and animations.
 
-Eine Straße kostet 18 € pro Feld, ein Wasserrohr 8 € und eine Stromleitung 12 €. Straßen und Schienen über Wasser kosten zusätzlich 90 € je Feld, Unterwasserleitungen zusätzlich 12 €. Das Räumen eines Baums beim Bauen kostet 2 €. Alle Preise, Bauflächen und Freischaltbedingungen stehen auch in der Werkzeugleiste.
+Roads cost €18 per tile, water pipes €8, and power lines €12. Roads and railways over water cost an extra €90 per tile; underwater utility lines cost an extra €12. Clearing a tree while building costs €2. The toolbar also lists prices, footprints, and unlock requirements.
 
-## Drei Ausbaustufen, Aufträge und Stadtziel
+## Three development stages, quests, and the city goal
 
-Öffne **Stadtentwicklung** über die Flagge oder das Stadtmenü. Der Stadtaufstieg richtet sich nach der Einwohnerzahl. Ein erreichter Rang und seine Freischaltungen bleiben erhalten, auch wenn die Bevölkerung später fällt.
+Open **City development** using the flag or the city menu. Population determines your city's stage. Once earned, a stage and its unlocks remain available even if population later falls.
 
-| Ausbaustufe | Einwohner | Neue Möglichkeiten | Gebäudeentwicklung in Zonen |
+| Stage | Population | New options | Zoned building growth |
 | --- | ---: | --- | --- |
-| **Kleinstadt** | ab 0 | Grundversorgung, Stadtdienste, Parks, Gelände und Leitungen | bis Gebäudestufe 2 |
-| **Großstadt** | ab 5.000 | Bahn, Wind- und Solarenergie, Stadion, Hafen, Recycling | bis Gebäudestufe 3 |
-| **Metropole** | ab 15.000 | Universität, Flughafen, höchste Wohn- und Geschäftshäuser | bis Gebäudestufe 4 |
+| **Small Town** | From 0 | Basic utilities, city services, parks, terrain, and utility lines | Up to building level 2 |
+| **City** | From 5,000 | Railways, wind and solar power, stadium, seaport, recycling | Up to building level 3 |
+| **Metropolis** | From 15,000 | University, airport, tallest residential and commercial buildings | Up to building level 4 |
 
-**14 Aufträge** belohnen unter anderem neue Straßen, Wohnraum, eigene Versorgungsnetze, ausgeglichene Finanzen und eine saubere Energieversorgung mit Geld und Erfahrungspunkten. Hole abgeschlossene Aufträge im Fenster **Stadtentwicklung** ab. Bestehende Starterbebauung zählt nicht als eigener Neubau. Erfahrungspunkte dokumentieren Erfolge; die Ausbaustufen hängen an den Einwohnergrenzen.
+**14 quests** reward roads, housing, your own utility networks, balanced finances, clean energy, and other milestones with money and experience points. Claim completed quests in **City development**. Existing starter-town buildings do not count as your own new construction. Experience records your achievements; stage progression depends on the population thresholds.
 
-Zusätzlich kannst du jeweils eine von **drei zeitlich begrenzten Challenges** starten:
+You can also attempt one of **three timed challenges** at a time:
 
-- **Aufbruch in die Metropole:** 5.000 zusätzliche Einwohner innerhalb von 60 Monaten.
-- **Grüne Hauptstadt:** innerhalb von 120 Monaten 10.000 Einwohner bei einer Umweltbelastung unter 10 erreichen.
-- **Goldene Stadtkasse:** innerhalb von 60 Monaten die Stadtkasse um 150.000 € steigern. Ein neuer Kredit beendet den Versuch.
+- **Metropolitan Growth:** add 5,000 residents within 60 months.
+- **Green Capital:** reach 10,000 residents with pollution below 10 within 120 months.
+- **Golden Treasury:** increase city funds by €150,000 within 60 months. Taking a new loan ends the attempt.
 
-Erfolgreiche Challenges bringen Geld, Erfahrung und ein bleibendes Abzeichen. Fehlgeschlagene Versuche können neu gestartet werden.
+Successful challenges award money, experience, and a permanent badge. Failed attempts can be restarted.
 
-Das **Stadtziel** ist erreicht, wenn du **sechs Monate in Folge gleichzeitig** mindestens **25.000 Einwohner**, **80 Zufriedenheit**, **70 Bildung**, **70 Gesundheit** und einen **positiven monatlichen Haushalt** hältst. Anschließend kannst du im freien Spiel weiterbauen. Aufträge und Challenges unterstützen den Weg; das Ziel verlangt nicht, dass vorher jeder Auftrag abgeschlossen wurde.
+The **city goal** requires **six consecutive months** with all of the following: at least **25,000 residents**, **80 happiness**, **70 education**, **70 health**, and a **positive monthly budget**. You can keep building afterward in free play. Quests and challenges help you get there; completing every quest is not required for the city goal.
 
-## Kamera, Autos und Bewohner
+## Camera, cars, and residents
 
-| Eingabe | Funktion |
+| Input | Action |
 | --- | --- |
-| Linksklick / links ziehen | Ausgewähltes Werkzeug anwenden |
-| **M**, dann links ziehen | Kamera verschieben |
-| **W A S D / Pfeiltasten** | Kamera bewegen |
-| Mittlere Maustaste oder **Alt + links ziehen** | Kamera verschieben |
-| Rechts ziehen / **Q und E** | Kamera drehen |
-| Mausrad | Zoomen |
-| **1 / 2 / 3 / 4 / 5** | Straße / Wohnen / Gewerbe / Industrie / Park |
-| **B / V / C** | Abreißen / Grundstück untersuchen / Bewohner greifen |
-| **R** | Großes Gebäude drehen |
-| **Leertaste** | Pause / mit 1× fortsetzen |
-| **G / N / H** | Raster / auf Tag oder Nacht schalten / Spielhilfe |
-| **L** | Stadtbeleuchtung ein- oder ausschalten |
-| **Cmd/Ctrl + S** | Speichern |
-| **Cmd/Ctrl + Z** | Rückgängig |
-| **Esc** | Fahrt beenden, Dialog schließen oder Auswahlwerkzeug aktivieren |
+| Left click / left drag | Use the selected tool |
+| **M**, then left drag | Pan the camera |
+| **W A S D / arrow keys** | Move the camera |
+| Middle mouse or **Alt + left drag** | Pan the camera |
+| Right drag / **Q and E** | Rotate the camera |
+| Mouse wheel | Zoom |
+| **1 / 2 / 3 / 4 / 5** | Road / residential / commercial / industrial / park |
+| **B / V / C** | Demolish / inspect lot / grab resident |
+| **R** | Rotate a large facility |
+| **Space** | Pause / resume at 1× |
+| **G / N / H** | Grid / switch day or night / game help |
+| **L** | Toggle city lights |
+| **Cmd/Ctrl + S** | Save |
+| **Cmd/Ctrl + Z** | Undo |
+| **Esc** | Leave the car, close a dialog, or activate the selection tool |
 
-Die **Weltkugel** zeigt die ganze Region, das **Fadenkreuz** bringt dich zur Innenstadt. Ein Klick auf die Minikarte verschiebt den Blick direkt an einen Ort. Unter **Stadtmenü → Kamera & Bewohner** findest du die Navigationshilfe.
+The **globe** shows the whole region; the **crosshair** returns to the city center. Click the minimap to move the view directly to a location. Find navigation help under **City menu → Camera & residents**.
 
-**Selbst fahren:** Wechsle mit **V** zur Auswahl, bewege die Maus über ein Fahrzeug und klicke auf das eingeblendete **Lenkrad**. Die Kamera folgt dem Wagen. **W/S** oder **↑/↓** beschleunigen, bremsen und fahren rückwärts; **A/D** oder **←/→** lenken. **Leertaste** ist die Handbremse: Bei Tempo und gleichzeitigem Lenken kann der Wagen seitlich driften. **Esc** beendet die Fahrt.
+**Drive a car:** press **V** to select, hover over a vehicle, and click its **steering wheel** button. The camera follows the car. **W/S** or **↑/↓** accelerate, brake, and reverse; **A/D** or **←/→** steer. **Space** applies the handbrake: steering while moving and holding it lets the car drift sideways. Press **Esc** to leave the car.
 
-Das Fahrprofil erlaubt **50 km/h auf Straßen in Bebauungsnähe**, **70 km/h auf freien Straßen außerhalb der Bebauung** und **25 km/h abseits der Straße**. Das aktuelle Tempo und die jeweilige Grenze erscheinen in der Fahranzeige. Limousinen, Taxis, Transporter und Lastwagen besitzen unterschiedliche Karosserien und Größen sowie runde Räder, Felgen, Spiegel und Leuchten.
+Driving allows **50 km/h on roads near buildings**, **70 km/h on open roads outside developed areas**, and **25 km/h off-road**. Your speed and the current limit appear in the driving display. Sedans, taxis, vans, and trucks have different body shapes and sizes, with round wheels, rims, mirrors, and lights.
 
-Fahrzeuge kollidieren mit anderen Fahrzeugen und den sichtbaren Baukörpern. Freie Vorplätze und Zwischenräume sind befahrbar, soweit der Wagen hindurchpasst; Wasser und Kartengrenzen bleiben Hindernisse. Angefahrene Bewohner können stürzen oder bei schweren Treffern sterben. Die vorhandenen Regeln für Einwohnerverlust und Zeugen gelten auch dabei.
+Vehicles collide with other vehicles and visible building structures. Open forecourts and gaps are drivable when the vehicle fits; water and map boundaries remain obstacles. Residents hit by a vehicle can fall or die from severe impacts. The population-loss and witness rules below apply to these collisions too.
 
-**Bewohner und Stadtleben:** Fußgänger nutzen die Gehwege und wechseln die Straßenseite über markierte Querungen. Ihre Sprechblasen schöpfen aus **über 450 verschiedenen deutschen Texten** zu Umgebung, Wetter und beobachteten Ereignissen. Jede Figur durchläuft den Textvorrat eines Themas, bevor sie daraus erneut zitiert; kürzlich gesagte Sätze anderer Figuren werden möglichst vermieden. Nach ausgeschöpftem Vorrat können Texte wiederkehren.
+**Residents and city life:** pedestrians use sidewalks and marked crossings. Their speech bubbles draw from **494 distinct lines, each available in English and German**, about their surroundings, weather, and observed events. Each resident cycles through a topic's lines before reusing them; recently spoken lines from other residents are avoided where possible. Lines may repeat after the available set is exhausted.
 
-Katzen und Hunde tauchen vereinzelt in bewohnten Vierteln und Parks auf. In geeigneten Waldgebieten abseits der Bebauung leben kleine Gruppen von Rehen und Kaninchen. Ihre Verteilung richtet sich nach der Landschaft und den vorhandenen Wohnvierteln.
+Cats and dogs appear occasionally in residential neighborhoods and parks. Small groups of deer and rabbits live in suitable woodland away from buildings. Their distribution follows the terrain and existing residential areas.
 
-**Bewohner greifen:** Mit **C** lassen sich die maßstäblich kleinen erwachsenen Figuren mit der Maus greifen und bewegen. Ein kleines Handsymbol markiert die Figur unter dem Mauszeiger. Ziehe die Maus nach oben, um sie anzuheben, und setze sie nahe am Boden langsam ab, damit sie weiterläuft. Die Figuren haben gerundete Formen, modellierte Gesichtsdetails sowie unterschiedliche Frisuren, Kleidung und Accessoires. Sie reagieren mit Sprechblasen auf Greifen oder beobachtete Vorfälle. Nach einem überstandenen Sturz richten sie sich mit einer Aufstehanimation wieder auf.
+**Grab residents:** press **C** to pick up and move the small adult figures with the mouse. A hand icon marks the resident under the pointer. Drag upward to lift them, and put them down slowly near the ground so they can walk away. Figures have rounded shapes, modeled facial details, and different hairstyles, clothing, and accessories. Speech bubbles respond to being grabbed and to witnessed events. Survivable falls end with a getting-up animation.
 
-Ein kräftiger Wurf aktiviert die Ragdoll-Physik; tödliche Aufpralle hinterlassen einen Blutfleck an Boden oder Gebäude. Ein tödlicher Aufprall oder eine Entführung über den Kartenrand reduziert die Bevölkerung um **genau einen Einwohner**. Befinden sich andere Bewohner oder eine Polizeiwache in Beobachtungsreichweite, sinkt zusätzlich die Zufriedenheit um **2 Punkte**; ohne Zeugen entfällt dieser Abzug. Die Sichtprüfung ist eine vereinfachte Reichweitenregel. Sichtbare Bewohner und Fahrzeuge bilden eine begrenzte Auswahl des Stadtlebens ab, keine vollständige Simulation jedes Einwohners und Arbeitswegs.
+A strong throw activates ragdoll physics; fatal impacts leave a blood mark on the ground or building. A fatal impact or carrying a resident beyond the map edge removes **exactly one resident** from the population. If other residents or a police station are within observation range, happiness also drops by **2 points**; without witnesses, that penalty does not apply. Observation uses a simplified distance rule. Visible residents and vehicles represent a limited sample of city life, not a full simulation of every citizen and commute.
 
-**Rückgängig** hält bis zu **zehn Bau- und Katastrophenaktionen** in der laufenden Sitzung vor. Mit dem nächsten Spielmonat oder einer anderen Zustandsänderung, etwa Steuern, Kredit, Wetter oder einem Einwohnerereignis, wird dieser Verlauf geleert. Pausiere zum Planen, wenn du mehrere Bauschritte zurücknehmen möchtest.
+**Undo** retains up to **ten construction and disaster actions** during the current session. The next game month or another state change, such as taxes, loans, weather, or a resident event, clears this history. Pause while planning if you want to undo several building steps.
 
-## Wetter, Grafik und Katastrophen
+## Weather, graphics, and disasters
 
-Unter **Grafik & Beleuchtung** stehen **Flüssig**, **Ausgewogen** und **Sehr hoch** bereit. Die Profile regeln Auflösung, Schattendetails und Kantenglättung. Solide stilisierte Wohnhäuser, blaue Hochhäuser mit Manhattan-Silhouette und Fabriken mit Sägezahndächern prägen die Stadt. Eigene Gras- und Geländematerialien, Wasser, atmosphärischer Himmel und der Nebel am Regionsrand ergänzen die Landschaft. Die Grafik verwendet Three.js mit WebGL2, weichen stabilisierten Echtzeitschatten und Materialreflexionen des Himmels.
+**Graphics & lighting** offers **Performance**, **Balanced**, and **Ultra** profiles controlling resolution, shadow detail, and antialiasing. Solid stylized houses, blue high-rises with Manhattan-inspired silhouettes, and sawtooth-roof factories define the city. Original grass and terrain materials, water, an atmospheric sky, and fog around the region complete the landscape. Rendering uses Three.js with WebGL2, soft stabilized real-time shadows, and sky reflections in materials.
 
-Der automatische **Tag-Nacht-Wechsel dauert etwa vier Minuten** bei laufender Stadt. Sonne, Mond und Schatten folgen der Tageszeit. Du kannst den Zyklus abschalten und eine feste Uhrzeit wählen. Die **Stadtbeleuchtung** schaltest du unabhängig davon über die **Glühbirne oben**, mit **L** oder im Grafikfenster ein und aus. Der Schalter steuert gemeinsam Gebäudefenster und Straßenlaternen. Versorgte Laternen besitzen warme Leuchtkörper und nachts sichtbare Lichtflächen auf der Straße; ohne Strom bleiben sie dunkel. **Regen** erzeugt nasse Oberflächen, Pfützen und Regentropfen.
+The automatic **day–night cycle takes about four minutes** while the city runs. The sun, moon, and shadows follow the time of day. You can disable the cycle and set a fixed time. Toggle **city lights** independently using the **light bulb at the top**, **L**, or the graphics dialog. This controls building windows and streetlights together. Powered streetlights have warm light fixtures and visible pools of light on the road at night; unpowered ones stay dark. **Rain** adds wet surfaces, puddles, and raindrops.
 
-Über **Stadtmenü → Stadt fotografieren** exportierst du die aktuelle Spielansicht als PNG. Große, dicht bebaute Regionen beanspruchen mehr Speicher und Rechenleistung; wähle bei Bedarf ein niedrigeres Grafikprofil. Eine bestimmte Bildrate wird nicht für alle Geräte zugesichert.
+Use **City menu → Take a photo** to export the current game view as a PNG. Large, dense regions require more memory and processing power; choose a lower graphics profile if needed. No particular frame rate is guaranteed across devices.
 
-Unter **Stadtmenü → Katastrophen** aktivierst du den **Experimentiermodus**. Erst dann lassen sich **Großbrand, Erdbeben, Hochwasser und schwerer Sturm** absichtlich auslösen. Die Ereignisse beschädigen Gebäude, Straßen oder Versorgungsnetze. Tiefe Küstenflächen sind bei Hochwasser gefährdet; Feuer kann sich ausbreiten und wird durch versorgte Feuerwachen begrenzt. Räume Trümmer und repariere unterbrochene Leitungen, um die Stadt wieder zu versorgen.
+Enable **Sandbox mode** under **City menu → Disasters** before deliberately triggering a **major fire, earthquake, flood, or severe storm**. Disasters damage buildings, roads, or utility networks. Burning sites show animated flames, a warm glow, rising smoke, and drifting embers. Low coastal land is vulnerable to flooding; fires can spread, while supplied fire stations limit them. Clear debris and repair broken utility lines to restore services.
 
-## Spielstände und Assets
+## Saves and assets
 
-Die Stadt wird **alle 30 Sekunden**, nach Änderungen mit kurzer Verzögerung sowie beim Ausblenden der Seite automatisch gespeichert. Das Diskettensymbol oder **Cmd/Ctrl + S** speichert manuell. Warte vor dem Schließen auf die Speicherbestätigung; die letzte Speicherung beim Schließen allein ist nicht garantiert.
+The city saves automatically **every 30 seconds**, shortly after changes, and when the page becomes hidden. The disk icon or **Cmd/Ctrl + S** saves manually. Wait for the save confirmation before closing; a final save during closing alone is not guaranteed.
 
-Große Spielstände liegen vorrangig in **IndexedDB**, mit lokalem Ersatzspeicher bei Bedarf. Es gibt einen aktiven Spielstand pro Browser und Serveradresse. **4173 und eine Entwicklungsadresse sind getrennte Speicherorte.** Nutze **Stadtmenü → Spielstand exportieren / importieren**, um Städte als JSON zu sichern oder zwischen Browsern, Geräten und Adressen zu übertragen. Ein Import oder eine neue Stadt ersetzt den aktiven Spielstand. Importdateien dürfen höchstens **12 MB** groß sein; ungültige Daten werden abgewiesen.
+Large saves primarily use **IndexedDB**, with fallback local storage when needed. There is one active save per browser and server address. **The local address on port 4173, a development address, and GitHub Pages use separate storage. Saves are not uploaded to GitHub.** Use **City menu → Export / import save** to back up a city as JSON or transfer it between browsers, devices, and addresses. To move online, first export from the local game, then import at the GitHub Pages address. Publishing the game does not transfer a save automatically. Importing a save or starting a new city replaces the active save. Import files are limited to **12 MB**; invalid data is rejected.
 
-Alte **40 × 40-Spielstände** werden beim Laden auf **128 × 128 Felder** erweitert, wobei die bisherige Stadtbebauung erhalten bleibt. Der ursprüngliche v1-Browserstand wird nicht überschrieben. Lässt sich ein vorhandener Spielstand nicht lesen oder validieren, blockiert das Spiel automatisches Überschreiben und zeigt einen Hinweis. Das Löschen der Browserdaten entfernt auch lokale Städte und Sicherungen; JSON-Exporte bleiben deshalb für dauerhafte Backups sinnvoll.
+Old **40 × 40 saves** expand to **128 × 128 tiles** when loaded, preserving existing city development. The original v1 browser save is not overwritten. If an existing save cannot be read or validated, the game blocks automatic overwriting and shows a warning. Clearing browser data also removes local cities and backups, so JSON exports are useful for lasting backups.
 
-Das Titelmotiv wurde mit ImageGen eigens für NEUSTADT erzeugt. Gebäude, Landschaft, Straßen, Fahrzeuge und Figuren verwenden eigene prozedurale Modelle und Materialien. Herkunft und Generierung sind in [ASSETS.md](ASSETS.md) dokumentiert. Schriftarten und Assets werden lokal ausgeliefert; externe Assetserver sind zur Laufzeit nicht erforderlich. Die Lizenztexte verwendeter Bibliotheken und Schriftarten liegen in [public/licenses/](public/licenses/).
+The cover was created specifically for NEUSTADT with ImageGen. Buildings, terrain, roads, vehicles, and figures use original procedural models and materials. See [ASSETS.md](ASSETS.md) for provenance and generation details. Fonts and assets are served locally; the game does not require external asset servers at runtime. The game’s MIT license and the library and font license texts are in [public/licenses/](public/licenses/).
 
-NEUSTADT verwendet keine Originalgrafiken, Musik oder Spielstände von SimCity 2000. Es bildet zentrale Städtebaumechaniken mit eigener Simulation ab; vollständige Funktionsgleichheit mit dem historischen Original ist nicht Teil dieser Fassung.
+NEUSTADT uses no original SimCity 2000 graphics, music, or saves. It implements core city-building mechanics with its own simulation; complete feature parity with the historical game is outside the scope of this version.
+
+## Open source and license
+
+NEUSTADT is released under the [MIT License](LICENSE): Copyright 2026 t3ramos. It covers the original game code, procedural models and materials, dialogue text, and original cover artwork to the extent rights exist. External libraries, icons, and fonts retain their respective licenses; the notices in [public/licenses/](public/licenses/) are included with the distributed game. [ASSETS.md](ASSETS.md) explains provenance and the distinction between original and third-party assets.
+
+Bug reports and contributions are welcome in the [personal GitHub repository](https://github.com/t3ramos/neustadt). For bugs, include reproduction steps, browser, and operating system. Check changes with `npm test` and `npm run build`; add both languages whenever you introduce visible text. Attach personal saves to a public report only if you intend to share them.

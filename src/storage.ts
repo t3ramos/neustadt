@@ -1,4 +1,5 @@
 /** Browser persistence. The original v1 save is deliberately never changed. */
+import { tr } from './i18n';
 export const CITY_DATABASE_NAME = 'neustadt-db';
 export const CITY_DATABASE_STORE = 'game';
 export const LEGACY_CITY_KEY = 'neustadt-save-v1';
@@ -35,9 +36,9 @@ function browserLocalStorage(): LocalStore | null {
 }
 
 function storageError(action: 'load' | 'save' | 'backup'): Error {
-  if (action === 'load') return new Error('Der Browserspeicher konnte nicht vollständig gelesen werden. Der vorhandene Spielstand bleibt erhalten. Exportiere deine Stadt vor weiteren Speicheränderungen.');
-  if (action === 'backup') return new Error('Die zusätzliche Sicherung konnte nicht angelegt werden. Der ursprüngliche Spielstand bleibt unverändert im Browser erhalten.');
-  return new Error('Spielstand konnte nicht gespeichert werden. Exportiere deine Stadt im Stadtmenü als Datei. Prüfe freien Speicherplatz und erlaube dieser Seite Browserspeicher; im privaten Modus kann der Speicher begrenzt sein.');
+  if (action === 'load') return new Error(tr('Der Browserspeicher konnte nicht vollständig gelesen werden. Der vorhandene Spielstand bleibt erhalten. Exportiere deine Stadt vor weiteren Speicheränderungen.','Browser storage could not be fully read. Your existing save is preserved. Export your city before making further changes to storage.'));
+  if (action === 'backup') return new Error(tr('Die zusätzliche Sicherung konnte nicht angelegt werden. Der ursprüngliche Spielstand bleibt unverändert im Browser erhalten.','The additional backup could not be created. Your original save remains unchanged in this browser.'));
+  return new Error(tr('Spielstand konnte nicht gespeichert werden. Exportiere deine Stadt im Stadtmenü als Datei. Prüfe freien Speicherplatz und erlaube dieser Seite Browserspeicher; im privaten Modus kann der Speicher begrenzt sein.','Your city could not be saved. Export it as a file from the city menu. Check available space and allow browser storage for this site; private browsing may limit storage.'));
 }
 
 /**

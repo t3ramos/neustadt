@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CITIZEN_LINES, CITIZEN_SPEECH_LIMITS, createCitizenSpeechSelector, type CitizenDialogueTopic } from '../src/citizen-dialogue.ts';
+import { CITIZEN_LINES, CITIZEN_LINES_EN, CITIZEN_SPEECH_LIMITS, createCitizenSpeechSelector, type CitizenDialogueTopic } from '../src/citizen-dialogue.ts';
+import { getLocale, setLocale } from '../src/i18n.ts';
 
 const topics = Object.keys(CITIZEN_LINES) as CitizenDialogueTopic[];
+test.beforeEach(() => setLocale('de'));
+test.afterEach(() => setLocale('de'));
 
 test('residents have hundreds of genuinely authored, unique, readable German remarks', () => {
   const allLines = Object.values(CITIZEN_LINES).flat();
@@ -18,6 +21,71 @@ test('residents have hundreds of genuinely authored, unique, readable German rem
       assert.doesNotMatch(line, /\n|\{\w+\}|\[\w+\]|TODO|Lorem ipsum/);
     }
   }
+});
+
+test('every authored observation has a distinct, readable English counterpart at the same index', () => {
+  assert.deepEqual(Object.keys(CITIZEN_LINES_EN), topics);
+  const germanLines = Object.values(CITIZEN_LINES).flat();
+  const englishLines = Object.values(CITIZEN_LINES_EN).flat();
+  assert.equal(englishLines.length, germanLines.length);
+  assert.equal(englishLines.length, 494);
+  const normalized = englishLines.map(line => line.toLocaleLowerCase('en-US').replace(/[^\p{L}\p{N}]/gu, ''));
+  assert.equal(new Set(normalized).size, englishLines.length, 'English observations must not collapse into repeated stock phrases');
+  for (const topic of topics) {
+    assert.equal(CITIZEN_LINES_EN[topic].length, CITIZEN_LINES[topic].length, `${topic} lost a translated observation`);
+    CITIZEN_LINES_EN[topic].forEach((line, index) => {
+      assert.notEqual(line, CITIZEN_LINES[topic][index], `${topic}[${index}] was left in German`);
+      assert.ok(line.length >= 20 && line.length <= 115, `${topic}: unreadable English bubble length ${line.length}: ${line}`);
+      assert.equal(line.trim(), line);
+      assert.doesNotMatch(line, /\n|\{\w+\}|\[\w+\]|TODO|Lorem ipsum|[äöüÄÖÜß]/);
+    });
+  }
+  assert.ok(CITIZEN_LINES_EN.night.every(line => !/lights|illumination|bright/i.test(line)), 'Night alone must not claim working lights');
+  assert.ok(CITIZEN_LINES_EN.pets.every(line => !/\b(cat|dog|bark|barks|meow|meows)\b/i.test(line)), 'Generic pet observations must work for either cat or dog');
+});
+
+test('switching language uses the same observations and does not restart personal topic bags', () => {
+  const selector = createCitizenSpeechSelector(714);
+  const reference = createCitizenSpeechSelector(714);
+  for (const topic of topics) {
+    const seenIndexes = new Set<number>();
+    for (let i = 0; i < CITIZEN_LINES[topic].length; i++) {
+      setLocale(i % 2 ? 'en' : 'de');
+      const expected = reference.pickPair(topic, 12);
+      const line = selector.pick(topic, 12);
+      assert.equal(line, expected[getLocale()]);
+      const index = (CITIZEN_LINES[topic] as readonly string[]).indexOf(expected.de);
+      assert.ok(!seenIndexes.has(index), `${topic} repeated an observation after changing language`);
+      seenIndexes.add(index);
+      assert.equal(expected.en, CITIZEN_LINES_EN[topic][index], `${topic} changed meaning between languages`);
+    }
+  }
+});
+
+test('pair and string selection each consume exactly one item of the shared deterministic sequence', () => {
+  const mixed = createCitizenSpeechSelector(814);
+  const reference = createCitizenSpeechSelector(814);
+  for (let i = 0; i < 1400; i++) {
+    const topic = topics[i % topics.length];
+    const actorId = i % 17;
+    setLocale(i % 4 < 2 ? 'de' : 'en');
+    const expected = reference.pickPair(topic, actorId);
+    if (i % 3) assert.equal(mixed.pick(topic, actorId), expected[getLocale()]);
+    else assert.deepEqual(mixed.pickPair(topic, actorId), expected);
+  }
+  assert.deepEqual(mixed.getDebug(), reference.getDebug());
+});
+
+test('a retained speech pair can change display language without choosing or remembering a new line', () => {
+  const selector = createCitizenSpeechSelector(22);
+  const pair = selector.pickPair('nearMiss', 9);
+  const memory = selector.getDebug();
+  assert.ok((CITIZEN_LINES.nearMiss as readonly string[]).includes(pair[getLocale()]));
+  setLocale('en');
+  assert.ok((CITIZEN_LINES_EN.nearMiss as readonly string[]).includes(pair[getLocale()]));
+  setLocale('de');
+  assert.equal(pair[getLocale()], pair.de);
+  assert.deepEqual(selector.getDebug(), memory);
 });
 
 test('each resident exhausts each contextual pool before reusing any line', () => {

@@ -29,7 +29,8 @@ test('sagging wire vertices touch both actual insulators and remain below the st
 test('connected poles, meters and wires merge into a small finite PBR mesh set',()=>{
   const state=smallGrid(),layout=getPowerLayout(state),group=createPowerGridModel(state,layout);
   assert.ok(layout.services.some(s=>state.tiles[s.building].kind==='power'));
-  assert.ok(layout.services.some(s=>state.tiles[s.building].kind==='residential'));
+  assert.ok(!layout.services.some(s=>state.tiles[s.building].kind==='residential'));
+  assert.equal(layout.services.length,1,'Only the large power facility receives a meter and drop');
   assert.deepEqual(group.userData.utilityCounts,{poles:layout.poles.length,spans:layout.spans.length,services:layout.services.length});
   assert.ok(group.children.length<=8);assert.ok(group.children.length>=4);
   for(const item of group.children){

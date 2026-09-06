@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { tr } from './i18n';
 
 export type VehicleKind = 'sedan' | 'taxi' | 'van' | 'truck';
 type Part = 'paint' | 'windows' | 'tires-and-trim' | 'rims-and-metal' | 'headlights' | 'taillights' | 'cargo-and-details';
@@ -356,7 +357,21 @@ function buildSharedGeometry(kind: VehicleKind): Partial<Record<Part, THREE.Buff
   return b.finish(kind);
 }
 
-const labels: Record<VehicleKind, string> = { sedan: 'Limousine', taxi: 'Taxi', van: 'Transporter', truck: 'Lastwagen' };
+export function vehicleKindLabel(kind:VehicleKind):string {
+  switch(kind) {
+    case 'sedan':return tr('Limousine','Sedan');
+    case 'taxi':return tr('Taxi','Taxi');
+    case 'van':return tr('Transporter','Van');
+    case 'truck':return tr('Lastwagen','Truck');
+  }
+}
+
+/** Re-label a live fleet without rebuilding geometry or disturbing traffic. */
+export function refreshVehicleLabel(car:THREE.Object3D):void {
+  const kind=car.userData.vehicleKind;
+  if(kind!=='sedan'&&kind!=='taxi'&&kind!=='van'&&kind!=='truck')return;
+  car.userData.vehicleLabel=vehicleKindLabel(kind);car.userData.label=car.userData.vehicleLabel;
+}
 const dynamics: Record<VehicleKind, { wheelBase: number; mass: number }> = { sedan: { wheelBase: .21, mass: 1 }, taxi: { wheelBase: .21, mass: 1 }, van: { wheelBase: .249, mass: 1.4 }, truck: { wheelBase: .3365, mass: 2.5 } };
 
 /** All four genuinely different body types share at most seven GPU batches. */
@@ -365,7 +380,7 @@ export function createDetailedCar(color: number, kind: VehicleKind = 'sedan'): T
   if (!geometries) { geometries = buildSharedGeometry(kind); sharedGeometry.set(kind, geometries); }
   const car = new THREE.Group();
   car.name = `detailed-city-${kind}`;
-  car.userData.vehicleForward = '+Z'; car.userData.vehicleKind = kind; car.userData.vehicleLabel = labels[kind]; car.userData.label = labels[kind];
+  car.userData.vehicleForward = '+Z'; car.userData.vehicleKind = kind; refreshVehicleLabel(car);
   for (const part of parts) {
     const geometry = geometries[part]; if (!geometry) continue;
     const mesh = new THREE.Mesh(geometry, part === 'paint' ? painted(color) : materials[part]);

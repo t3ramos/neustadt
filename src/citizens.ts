@@ -5,7 +5,8 @@ import * as CANNON from 'cannon-es';
 import { createTileModel } from './models';
 import { sampleGroundHeight } from './terrain-graphics';
 import { createPedestrianGraph, type PedestrianGraph } from './citizen-routing';
-import { createCitizenSpeechSelector, type CitizenDialogueTopic } from './citizen-dialogue';
+import { createCitizenSpeechSelector, type CitizenDialogueTopic, type CitizenDialoguePair } from './citizen-dialogue';
+import { tr } from './i18n';
 import type { CityState, CitizenIncident, Tile } from './types';
 
 export const MAX_CITIZENS = 150;
@@ -37,10 +38,15 @@ export interface CitizenSpeech {actorId:number;text:string;kind:CitizenSpeechKin
 
 /** Event-driven, bounded dialogue: reactions can interrupt idle chatter. */
 export class CitizenDialogue {
-  private active:CitizenSpeech[]=[];
+  private active:(CitizenSpeech&{pair?:CitizenDialoguePair})[]=[];
   private last=new Map<string,number>();
   private priority(kind:CitizenSpeechKind):number {return kind==='idle'?0:kind==='observation'?1:2;}
-  getActive(now:number):CitizenSpeech[] {this.active=this.active.filter(speech=>speech.expiresAt>now);return this.active.map(speech=>({...speech}));}
+  getActive(now:number):CitizenSpeech[] {
+    this.active=this.active.filter(speech=>speech.expiresAt>now);
+    // Keep the selected line and its expiry: changing language must not select
+    // another line, reset a reaction cooldown, or extend a bubble's lifetime.
+    return this.active.map(({pair,...speech})=>({...speech,text:pair?tr(pair.de,pair.en):speech.text}));
+  }
   canSpeak(actorId:number,kind:CitizenSpeechKind,now:number):boolean {
     this.getActive(now);
     const key=`${actorId}:${kind}`,cooldown=kind==='idle'?14:4;
@@ -50,7 +56,7 @@ export class CitizenDialogue {
     if(existing<0&&this.active.length>=3&&!this.active.some(speech=>this.priority(speech.kind)<=this.priority(kind)))return false;
     return true;
   }
-  speak(actorId:number,text:string,kind:CitizenSpeechKind,now:number):boolean {
+  speak(actorId:number,text:string|CitizenDialoguePair,kind:CitizenSpeechKind,now:number):boolean {
     if(!this.canSpeak(actorId,kind,now))return false;
     const key=`${actorId}:${kind}`,existing=this.active.findIndex(speech=>speech.actorId===actorId);
     if(existing>=0)this.active.splice(existing,1);
@@ -58,7 +64,8 @@ export class CitizenDialogue {
       const lowest=Math.min(...this.active.map(speech=>this.priority(speech.kind))),oldest=this.active.findIndex(speech=>this.priority(speech.kind)===lowest);
       this.active.splice(oldest,1);
     }
-    this.last.set(key,now);this.active.push({actorId,text:text.slice(0,140),kind,expiresAt:now+3.5});return true;
+    const pair=typeof text==='string'?undefined:{de:text.de.slice(0,140),en:text.en.slice(0,140)};
+    this.last.set(key,now);this.active.push({actorId,text:typeof text==='string'?text.slice(0,140):pair!.de,kind,expiresAt:now+3.5,...(pair?{pair}:{})});return true;
   }
   forget(actorId:number):void {this.active=this.active.filter(speech=>speech.actorId!==actorId);for(const key of this.last.keys())if(key.startsWith(`${actorId}:`))this.last.delete(key);}
   clear():void {this.active=[];this.last.clear();}
@@ -345,6 +352,7 @@ export interface CitizenSystem {
   clearHover:()=>void;
   setEnabled:(enabled:boolean)=>void;
   setUiVisible:(visible:boolean)=>void;
+  refreshLocale:()=>void;
   sweepVehicleImpact:(event:CitizenVehicleSweep)=>void;
   notifyObservation:(event:CitizenObservation)=>void;
   readonly holding:boolean;
@@ -409,7 +417,7 @@ export function createCitizens(initialState:CityState,onIncident?:(incident:Inci
   function say(citizen:Citizen,topic:CitizenDialogueTopic,kind:CitizenSpeechKind):boolean {
     if(citizen.dead||!dialogue.canSpeak(citizen.id,kind,elapsed))return false;
     if((kind==='idle'||kind==='observation')&&!onScreen(citizen))return false;
-    return dialogue.speak(citizen.id,speechSelector.pick(topic,citizen.id),kind,elapsed);
+    return dialogue.speak(citizen.id,speechSelector.pickPair(topic,citizen.id),kind,elapsed);
   }
   function onScreen(citizen:Citizen):boolean {
     if(!ui)return true;
@@ -917,6 +925,7 @@ export function createCitizens(initialState:CityState,onIncident?:(incident:Inci
     clearHover(){if(!held){hovered=null;if(handBadge)handBadge.style.display='none';}},
     setEnabled(value){if(!value)cancel();enabled=value;},
     setUiVisible(value){uiVisible=value;if(overlay)overlay.style.display=value?'block':'none';},
+    refreshLocale:updateUi,
     get holding(){return !!held;},get cursor(){return held?'grabbing':hovered?'grab':'default';},
     getDebug(){return {count:citizens.length,ragdolls:citizens.filter(c=>c.ragdoll).length,recovering:citizens.filter(c=>c.recovery).length,held:held?.citizen.id??null,hovered:hovered?.id??null,speech:dialogue.getActive(elapsed),positions:citizens.filter(c=>!c.dead).map(c=>{const p=c.ragdoll?actorTorso(c).add(new THREE.Vector3(0,-.32*c.scale,0)):c.position;return {id:c.id,x:p.x,y:p.y,z:p.z,crossing:c.crossing,state:c.recovery?'recovering' as const:c.ragdoll?.held?'held' as const:c.ragdoll?'ragdoll' as const:'walking' as const};})};},
     dispose(){cancel();for(const c of citizens)c.ragdoll?.dispose();for(const value of statics.values())world.removeBody(value.body);statics.clear();

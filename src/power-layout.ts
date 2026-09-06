@@ -1,7 +1,9 @@
-import type { CityState, Point, Tile } from './types';
+import type { CityState, Tile } from './types';
 import { getFootprint, isBuildingAnchor, TOOL_DEFS } from './simulation';
 import { sampleRoadHeight } from './road-graphics';
 import { sampleGroundHeight } from './terrain-graphics';
+import { applyFacilityPowerFeeds, powerPoleCenter, powerServiceCandidates } from './power-service';
+import { getPowerBlockMask } from './power-block';
 
 export interface PowerPole {
   /** Stable tile index; x/z are integer tile coordinates. Roads use curb centers at +0.86, other tiles +0.5. */
@@ -40,23 +42,23 @@ export interface PowerLayout {
 const OFFSETS = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
 const isZone = (tile: Tile) => tile.kind === 'residential' || tile.kind === 'commercial' || tile.kind === 'industrial';
 const isFacility = (tile: Tile) => !!TOOL_DEFS[tile.kind]?.footprint;
+const needsService = (tile: Tile) => {
+  const footprint = TOOL_DEFS[tile.kind]?.footprint;
+  return !!footprint && footprint[0] * footprint[1] > 1;
+};
 const hasBuilding = (tile: Tile) => isFacility(tile) || isZone(tile) && tile.level > 0;
-const conducts = (tile: Tile) => tile.fire === 0 && (tile.hasPowerLine || hasBuilding(tile));
 const sourceCapacity = (tile: Tile) => tile.kind === 'power' ? 6000 : tile.kind === 'wind' ? 1200 : tile.kind === 'solar' ? 3200 : 0;
 const indexAt = (state: CityState, x: number, z: number) => x < 0 || z < 0 || x >= state.size || z >= state.size ? -1 : z * state.size + x;
-// Match the renderer's sidewalk placement, including service-ray occlusion and the mast base.
-const poleCenter = (tile: Tile): [number, number] => {
-  const offset = tile.kind === 'road' ? .86 : .5;
-  return [tile.x + offset, tile.z + offset];
-};
 
 interface Network {
   membership: Int32Array;
   supply: number[];
 }
 
-/** Mirror the simulation: buildings conduct too, but only explicit open-air lines get poles. */
+/** Mirror the simulation: contiguous zoned blocks conduct too, including vacant zoned lots. */
 function makeNetwork(state: CityState): Network {
+  const blockMask = getPowerBlockMask(state);
+  const conducts = (tile: Tile) => tile.fire === 0 && (tile.hasPowerLine || isFacility(tile) || isZone(tile) || blockMask[tile.z * state.size + tile.x] === 1);
   const membership = new Int32Array(state.tiles.length).fill(-1);
   const supply: number[] = [];
   for (let start = 0; start < state.tiles.length; start++) {
@@ -79,56 +81,16 @@ function makeNetwork(state: CityState): Network {
   return { membership, supply };
 }
 
-/** Keep the exact footprint / dz / dx order used by simulation.findNetwork for supply ties. */
-function servingComponent(state: CityState, network: Network, footprint: Point[]): number {
-  let best = -1, bestSupply = -1;
-  for (const point of footprint) for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
-    if (Math.abs(dx) + Math.abs(dz) > 2) continue;
-    const id = indexAt(state, point.x + dx, point.z + dz);
-    if (id < 0) continue;
-    const component = network.membership[id];
-    if (component >= 0 && network.supply[component] > bestSupply) {
-      best = component;
-      bestSupply = network.supply[component];
-    }
-  }
-  return best;
-}
-
-function lotTerminal(footprint: Point[], pole: Tile): [number, number] {
-  let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
-  for (const point of footprint) {
-    minX = Math.min(minX, point.x); minZ = Math.min(minZ, point.z);
-    maxX = Math.max(maxX, point.x + 1); maxZ = Math.max(maxZ, point.z + 1);
-  }
-  const [x, z] = poleCenter(pole);
-  const dx = x < minX ? minX - x : x > maxX ? x - maxX : 0;
-  const dz = z < minZ ? minZ - z : z > maxZ ? z - maxZ : 0;
-  // Center on the nearest boundary segment, rather than sending a diagonal cable to a roof.
-  // The 5 cm inset leaves the meter's conduit visibly inside the developed foundation.
-  if (dx >= dz && dx > 0) return [x < minX ? minX + .05 : maxX - .05, Math.max(minZ + .5, Math.min(maxZ - .5, z))];
-  return [Math.max(minX + .5, Math.min(maxX - .5, x)), z < minZ ? minZ + .05 : maxZ - .05];
-}
-
-function clearDrop(state: CityState, pole: Tile, target: [number, number], footprintIds: Set<number>): boolean {
-  const [startX, startZ] = poleCenter(pole);
-  const steps = Math.ceil(Math.hypot(target[0] - startX, target[1] - startZ) / .15);
-  const poleId = pole.z * state.size + pole.x;
-  for (let step = 1; step < steps; step++) {
-    const t = step / steps;
-    const id = indexAt(state, Math.floor(startX + (target[0] - startX) * t), Math.floor(startZ + (target[1] - startZ) * t));
-    if (id >= 0 && id !== poleId && !footprintIds.has(id) && hasBuilding(state.tiles[id])) return false;
-  }
-  return true;
-}
-
 /**
  * Linear network construction plus bounded, radius-two service searches. A service is a
- * faithful local visualization of the assigned powered network; remote buildings may receive
- * electricity through the simulation's building conductors without a fictitious overhead drop.
+ * local visualization for large facilities only. Ordinary lots share their block's supply
+ * without overhead service drops or meters, regardless of their development level.
  */
 export function getPowerLayout(state: CityState): PowerLayout {
   const network = makeNetwork(state);
+  const facilityFeeds = applyFacilityPowerFeeds(state, network,
+    state.tiles.filter(tile => needsService(tile) && isBuildingAnchor(state, tile)),
+    tile => getFootprint(state, tile), hasBuilding);
   const lines = new Map<number, number[]>();
   const poleIds = new Set<number>();
   for (let id = 0; id < state.tiles.length; id++) {
@@ -151,32 +113,22 @@ export function getPowerLayout(state: CityState): PowerLayout {
   const services: PowerService[] = [];
   for (let building = 0; building < state.tiles.length; building++) {
     const tile = state.tiles[building];
-    if (!hasBuilding(tile) || tile.fire !== 0 || !isBuildingAnchor(state, tile)) continue;
+    if (!needsService(tile) || tile.fire !== 0 || !isBuildingAnchor(state, tile)) continue;
     const footprint = getFootprint(state, tile);
-    // Sources export into their own conductive component, even beside a stronger other source.
-    const component = sourceCapacity(tile) > 0 ? network.membership[building] : servingComponent(state, network, footprint);
+    const candidates = powerServiceCandidates(state, footprint, hasBuilding);
+    // Legal incoming facility feeds have already joined their receiving block to its source.
+    const component = network.membership[building];
     if (component < 0 || network.supply[component] <= 0) continue;
-    const footprintIds = new Set(footprint.map(point => point.z * state.size + point.x));
-    const candidateDistances = new Map<number, number>();
-    for (const point of footprint) for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
-      const distance = Math.abs(dx) + Math.abs(dz);
-      if (distance > 2) continue;
-      const id = indexAt(state, point.x + dx, point.z + dz);
-      if (id < 0 || !lines.has(id) || network.membership[id] !== component) continue;
-      candidateDistances.set(id, Math.min(distance, candidateDistances.get(id) ?? Infinity));
-    }
-    const candidates = [...candidateDistances.keys()].sort((a, b) => Number(poleIds.has(b)) - Number(poleIds.has(a)) || candidateDistances.get(a)! - candidateDistances.get(b)! || a - b);
-    for (const pole of candidates) {
-      const target = lotTerminal(footprint, state.tiles[pole]);
-      if (!clearDrop(state, state.tiles[pole], target, footprintIds)) continue;
-      poleIds.add(pole);
-      services.push({ building, pole, targetX: target[0], targetZ: target[1], elevation: tile.elevation, powered: tile.powered });
-      break;
-    }
+    const candidate = facilityFeeds.get(building) ?? candidates.filter(item => network.membership[item.pole] === component && lines.has(item.pole))
+      .sort((a, b) => Number(poleIds.has(b.pole)) - Number(poleIds.has(a.pole)) || a.distance - b.distance || a.pole - b.pole)[0];
+    if (!candidate) continue;
+    const { pole, targetX, targetZ } = candidate;
+    poleIds.add(pole);
+    services.push({ building, pole, targetX, targetZ, elevation: tile.elevation, powered: tile.powered });
   }
 
   const poles: PowerPole[] = [...poleIds].sort((a, b) => a - b).map(id => {
-    const tile = state.tiles[id], [gridX, gridZ] = poleCenter(tile);
+    const tile = state.tiles[id], [gridX, gridZ] = powerPoleCenter(tile);
     const x = gridX - state.size / 2, z = gridZ - state.size / 2;
     return {
       id, x: tile.x, z: tile.z,
@@ -208,7 +160,7 @@ export function powerLayoutSignature(state: CityState): string {
   const parts = [`${state.size}`];
   for (let id = 0; id < state.tiles.length; id++) {
     const tile = state.tiles[id];
-    if (tile.hasPowerLine || isFacility(tile) || isZone(tile)) {
+    if (tile.hasPowerLine || isFacility(tile) || isZone(tile) || ['road', 'rail', 'water'].includes(tile.kind) || tile.elevation < 0 || tile.fire !== 0) {
       parts.push(`${id}:${tile.kind}:${tile.level}:${tile.elevation}:${tile.anchor}:${tile.rotation}:${tile.fire}:${Number(tile.hasPowerLine)}:${Number(tile.powered)}`);
     }
     // Open-air mast bases interpolate their surrounding terrain/road corners. Adjacent terrain

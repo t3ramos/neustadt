@@ -1,3 +1,8 @@
+import { getLocale } from './i18n';
+import { CITIZEN_LINES_EN_A } from './citizen-dialogue-en-a';
+import { CITIZEN_LINES_EN_B } from './citizen-dialogue-en-b';
+import { CITIZEN_LINES_EN_C } from './citizen-dialogue-en-c';
+
 /** Authored observations: callers select a topic only after observing its cause. */
 export const CITIZEN_LINES = {
   everyday: [
@@ -560,6 +565,17 @@ export const CITIZEN_LINES = {
 
 export type CitizenDialogueTopic = keyof typeof CITIZEN_LINES;
 
+/** Matching indexes identify one observation in both languages. */
+export const CITIZEN_LINES_EN = {
+  ...CITIZEN_LINES_EN_A,
+  ...CITIZEN_LINES_EN_B,
+  ...CITIZEN_LINES_EN_C,
+} as const satisfies {
+  [Topic in CitizenDialogueTopic]: readonly string[] & { readonly length: typeof CITIZEN_LINES[Topic]['length'] };
+};
+
+export interface CitizenDialoguePair { readonly de: string; readonly en: string; }
+
 export const CITIZEN_SPEECH_LIMITS = Object.freeze({ actors: 256, actorHistory: 8, globalHistory: 12 });
 
 interface SpeakerMemory { recent: string[]; bags: Map<CitizenDialogueTopic, number[]>; }
@@ -586,8 +602,7 @@ export function createCitizenSpeechSelector(seed = 1) {
     if (history.length > limit) history.shift();
   };
 
-  return {
-    pick(topic: CitizenDialogueTopic, actorId: number): string {
+  const pickPair = (topic: CitizenDialogueTopic, actorId: number): CitizenDialoguePair => {
       let actor = actors.get(actorId);
       if (!actor) actor = { recent: [], bags: new Map() };
       // Refresh insertion order so frequently seen residents retain their memory.
@@ -612,11 +627,18 @@ export function createCitizenSpeechSelector(seed = 1) {
       if (selected < 0) selected = bag.findIndex(index => !actor.recent.includes(lines[index]));
       if (selected < 0) selected = bag.findIndex(index => lines[index] !== actor.recent.at(-1));
       if (selected < 0) selected = 0;
-      const line = lines[bag.splice(selected, 1)[0]];
+      const index = bag.splice(selected, 1)[0];
+      const line = lines[index];
       remember(actor.recent, line, CITIZEN_SPEECH_LIMITS.actorHistory);
       remember(recentGlobal, line, CITIZEN_SPEECH_LIMITS.globalHistory);
-      return line;
-    },
+      return { de: line, en: CITIZEN_LINES_EN[topic][index] };
+  };
+
+  return {
+    // Both entry points consume exactly one shared language-independent bag.
+    pick(topic: CitizenDialogueTopic, actorId: number): string { return pickPair(topic, actorId)[getLocale()]; },
+    // Active bubbles keep this pair, so changing language does not select again.
+    pickPair,
     forget(actorId: number): void { actors.delete(actorId); },
     clear(): void { actors.clear(); recentGlobal.length = 0; },
     getDebug() {

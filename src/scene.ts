@@ -8,6 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createTileModel, setModelNightBlend, setModelWet, getModelFootprint, createFacilityActors, updateFacilityActors } from './models';
 import { previewBuild, getFootprint, isBuildingAnchor } from './simulation';
 import { createWeatherEffects } from './weather-graphics';
+import { createFireEffects } from './fire-effects';
 import { createCitizens } from './citizens';
 import { createDrivingController, getVehicleDimensions, type VehicleCollision } from './driving';
 import { findVehicleContact, type VehicleContactBody } from './vehicle-contacts';
@@ -21,6 +22,7 @@ import { createPowerGridModel } from './power-model';
 import { createRegionContext, getRegionMargin } from './region-context';
 import { buildTerrainChunk, buildTerrainSkirt, createTerrainMaterials, terrainChunkSignature, sampleGroundHeight } from './terrain-graphics';
 import type { CityState, CitySceneApi, SceneCallbacks, Point, Tool, Overlay, Tile, Weather, BuildOptions } from './types';
+import { tr } from './i18n';
 
 type GraphicsQuality='performance'|'balanced'|'ultra';
 
@@ -146,7 +148,10 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   renderer.info.autoReset = false;
   renderer.transmissionResolutionScale=.5;
   renderer.domElement.className = 'city-canvas';
-  renderer.domElement.setAttribute('aria-label', 'Interaktive 3D-Stadt. Links bauen, rechts drehen, mit dem Mausrad zoomen.');
+  function refreshCanvasLabel():void {
+    renderer.domElement.setAttribute('aria-label',tr('Interaktive 3D-Stadt. Links bauen, rechts drehen, mit dem Mausrad zoomen.','Interactive 3D city. Left-click to build, right-drag to rotate, and use the mouse wheel to zoom.'));
+  }
+  refreshCanvasLabel();
   renderer.domElement.setAttribute('tabindex', '0');
   renderer.domElement.style.touchAction = 'none';
   renderer.domElement.style.display = 'block';
@@ -313,7 +318,8 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   for (const helper of [overlayMesh, ghost, ghostEdges, ghostVolume, cursor, selection]) {helper.userData.raytracingExclude = true;helper.userData.ambientOcclusionExclude=true;}
 
   const weatherEffects=createWeatherEffects(scene,state);
-  let burningTiles:Tile[]=[];
+  const fireEffects=createFireEffects(state);
+  live.add(fireEffects.group);
   const cars: Car[] = [];
   const collisions:VehicleCollision[]=[];
   let trafficSeed=state.seed;
@@ -335,10 +341,6 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
   let roadCells: Point[] = [];
   let roadKey = '';
   const boats: { group: THREE.Group; x: number; z: number; phase: number }[] = [];
-  const fires = new THREE.InstancedMesh(new THREE.ConeGeometry(0.18, 0.8, 5), new THREE.MeshBasicMaterial({ color: 0xff773e, transparent: true, opacity: 0.94 }), size * size);
-  fires.count = 0;
-  fires.frustumCulled = false;
-  live.add(fires);
 
   function tileAt(x: number, z: number): Tile | undefined {
     if (x < 0 || z < 0 || x >= state.size || z >= state.size) return undefined;
@@ -385,7 +387,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     for (let z = cz; z < Math.min(cz + CHUNK, size); z++) {
       for (let x = cx; x < Math.min(cx + CHUNK, size); x++) {
         const tile = tileAt(x, z)!;
-        signature += `${tile.kind}:${tile.level}:${tile.variation}:${tile.elevation}:${tile.anchor}:${tile.rotation}:${tile.fire>0}:${tile.hasPipe}:${tile.hasPowerLine};`;
+        signature += `${tile.kind}:${tile.level}:${tile.variation}:${tile.elevation}:${tile.anchor}:${tile.rotation}:${tile.hasPipe}:${tile.hasPowerLine};`;
         if (tile.kind === 'road' || tile.kind === 'rail') {
           for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){const neighbor=tileAt(x+dx,z+dz);signature+=`${neighbor?.kind}:${neighbor?.elevation};`;}
         }
@@ -664,17 +666,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
       boat.group.position.set(boat.x + Math.sin(elapsed * 0.06 + boat.phase) * 0.22, Math.sin(elapsed * 1.1 + boat.phase) * 0.012, boat.z + Math.cos(elapsed * 0.06 + boat.phase) * 0.22);
       boat.group.rotation.z = Math.sin(elapsed * 0.7 + boat.phase) * 0.035;
     }
-    let fireIndex = 0;
-    for (const tile of burningTiles) {
-      const s = 0.75 + Math.sin(elapsed * 9 + tile.x + tile.z) * 0.2;
-      dummy.position.set(tile.x - half + 0.5, Math.max(0,tile.elevation) + 0.5 + tile.level * 0.30, tile.z - half + 0.5);
-      dummy.rotation.set(0, elapsed * 1.5, 0);
-      dummy.scale.set(s, s * 1.3, s);
-      dummy.updateMatrix();
-      fires.setMatrixAt(fireIndex++, dummy.matrix);
-    }
-    fires.count = fireIndex;
-    if (fireIndex) fires.instanceMatrix.needsUpdate = true;
+    fireEffects.animate(elapsed,driving.active?driving.selectedCar?.model.position??controls.target:controls.target);
     for(const actors of actorChunks.values()) for(const actor of actors) updateFacilityActors(actor,simulationElapsed,state);
     weatherEffects.animate(dt,elapsed,driving.active?driving.selectedCar?.model.position??controls.target:controls.target);
     if (selection.visible) selectionMaterial.opacity = 0.58 + Math.sin(elapsed * 2.8) * 0.14;
@@ -1035,7 +1027,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
     if(buildingLights!==state.settings.buildingLights)setBuildingLights(state.settings.buildingLights);
     if(Math.abs(timeOfDay-state.settings.timeOfDay)>.025){timeOfDay=state.settings.timeOfDay;applyDaylight(true);}
     weatherEffects.update(state);
-    burningTiles=state.tiles.filter(t=>t.fire>0);
+    fireEffects.update(state);
     const event=state.events[0];
     if(event&&event.id!==latestEvent){latestEvent=event.id;if(/Erdbeben|Erdstoß/i.test(event.title))shakeRemaining=1.3;if(/Sturm|Gewitter/i.test(event.title))disasterFlash=1.1;}
     if(weather!==state.settings.weather)setWeather(state.settings.weather);
@@ -1094,7 +1086,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
 
   return {
     getDiagnostics(){
-      return {cars:cars.map(car=>({id:car.model.id,x:car.model.position.x,y:car.model.position.y,z:car.model.position.z,yaw:car.model.rotation.y,kind:car.model.userData.vehicleKind,label:car.model.userData.vehicleLabel,dimensions:getVehicleDimensions(car.model),controlled:driving.controlsCar(car),waiting:!!car.model.userData.trafficWaiting})),citizens:citizens.getDebug(),animals:animals.getDebug(),streetlights:streetlights.getDebug(),driving:driving.getStatus(),collisions:collisions.map(event=>({...event,point:{...event.point},normal:{...event.normal}}))};
+      return {cars:cars.map(car=>({id:car.model.id,x:car.model.position.x,y:car.model.position.y,z:car.model.position.z,yaw:car.model.rotation.y,kind:car.model.userData.vehicleKind,label:car.model.userData.vehicleLabel,dimensions:getVehicleDimensions(car.model),controlled:driving.controlsCar(car),waiting:!!car.model.userData.trafficWaiting})),citizens:citizens.getDebug(),animals:animals.getDebug(),streetlights:streetlights.getDebug(),fires:fireEffects.getDebug(),driving:driving.getStatus(),collisions:collisions.map(event=>({...event,point:{...event.point},normal:{...event.normal}}))};
     },
     getInteractionTargets(){
       const activeCamera=driving.active?driving.camera:camera;
@@ -1111,6 +1103,10 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
       };
     },
     update,
+    refreshLocale() {
+      refreshCanvasLabel();driving.refreshLocale();citizens.refreshLocale();
+      callbacks.onHover(currentHover);refreshGhost();
+    },
     setTool(nextTool, nextBrush,nextRotation=0) {
       if(driving.active)exitDrive();
       driving.clearHover();
@@ -1178,7 +1174,7 @@ export function createCityScene(container: HTMLElement, initialState: CityState,
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('visibilitychange',onBlur);
-      citizens.dispose();animals.dispose();streetlights.dispose();
+      citizens.dispose();animals.dispose();streetlights.dispose();fireEffects.dispose();
       driving.dispose();lighting.dispose();
       scene.traverse(object => {
         if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {

@@ -4,6 +4,8 @@ import { sampleGroundHeight } from './terrain-graphics';
 import { sampleRoadHeight } from './road-graphics';
 import { createDrivingCollisionWorld, type DrivingCollisionWorld } from './driving-collisions';
 import { findVehicleContact, resolveVehicleContact, sweepVehicleContact, type VehicleContactBody } from './vehicle-contacts';
+import { refreshVehicleLabel, vehicleKindLabel } from './vehicle-model';
+import { tr } from './i18n';
 
 /** Cars stay owned by the city scene, including their autonomous route. */
 export interface DrivableCar {
@@ -48,6 +50,20 @@ const zonedKinds = new Set<Tile['kind']>(['residential', 'commercial', 'industri
 const clamp = THREE.MathUtils.clamp;
 const damp = (current: number, target: number, response: number, dt: number) => THREE.MathUtils.lerp(current, target, 1 - Math.exp(-response * dt));
 const worlds = new WeakMap<CityState, DrivingCollisionWorld>();
+
+/** Physics keeps canonical reasons so a language change cannot affect contact
+ * or camera decisions. Only the presentation boundary localizes them. */
+export function localizedDrivingObstacle(reason:string):string {
+  switch(reason) {
+    case 'Stadtrand erreicht':return tr('Stadtrand erreicht','City boundary reached');
+    case 'Hier ist Wasser':return tr('Hier ist Wasser','Water ahead');
+    case 'Baum im Weg':return tr('Baum im Weg','Tree in the way');
+    case 'Gebäude im Weg':return tr('Gebäude im Weg','Building in the way');
+    case 'Hang zu steil':return tr('Hang zu steil','Slope too steep');
+    case 'Zusammenstoß':return tr('Zusammenstoß','Collision');
+    default:return reason;
+  }
+}
 
 function collisionWorldFor(state: CityState): DrivingCollisionWorld {
   let world = worlds.get(state);
@@ -265,6 +281,7 @@ export interface DrivingController {
   keyUp: (code: string) => boolean;
   resize: (width: number, height: number) => void;
   getStatus: () => DrivingStatus;
+  refreshLocale: () => void;
   dispose: () => void;
 }
 
@@ -285,7 +302,7 @@ export function createDrivingController(
   let accumulator = 0, elapsed = 0, missedHover = 0, lastStatus = '', lastHover = '';
   let hoverCamera: THREE.Camera | null = null;
   let viewport = { left: 0, top: 0, width: 1, height: 1 };
-  let label = '', disposed = false;
+  let disposed = false;
   let entryProgress = 1;
   let pointerOverCanvas = false;
   let hoverNear = 0, hoverFar = Infinity;
@@ -320,7 +337,10 @@ export function createDrivingController(
   const hoverRay = new THREE.Ray();
 
   function vehicleLabel(car: DrivableCar): string {
-    return car.model.userData.vehicleLabel ?? `Stadtauto ${String(getCars().indexOf(car) + 1).padStart(2, '0')}`;
+    const kind=car.model.userData.vehicleKind;
+    if(kind==='sedan'||kind==='taxi'||kind==='van'||kind==='truck')return vehicleKindLabel(kind);
+    const number=String(getCars().indexOf(car)+1).padStart(2,'0');
+    return car.model.userData.vehicleLabel ?? tr(`Stadtauto ${number}`,`City car ${number}`);
   }
 
   function pickRadius(car: DrivableCar): number {
@@ -330,9 +350,9 @@ export function createDrivingController(
 
   function getStatus(): DrivingStatus {
     return {
-      active: !!selected, speed: motion ? Math.round(Math.hypot(motion.vx, motion.vz) * 36) * (motion.speed < -.05 ? -1 : 1) : 0, label,
+      active: !!selected, speed: motion ? Math.round(Math.hypot(motion.vx, motion.vz) * 36) * (motion.speed < -.05 ? -1 : 1) : 0, label:selected?vehicleLabel(selected):'',
       speedLimit: motion ? getDrivingSpeedLimit(state, motion.x, motion.z) : 50, drifting: motion?.drifting ?? false, collisionCount,
-      ...(motion?.blocked ? { blocked: motion.blocked } : {}),
+      ...(motion?.blocked ? { blocked: localizedDrivingObstacle(motion.blocked) } : {}),
     };
   }
 
@@ -414,7 +434,7 @@ export function createDrivingController(
     if (disposed || selected) return false;
     const car = getCars().find(car => car.model.id === id);
     if (!car) return false;
-    selected = car; label = vehicleLabel(car); keys.clear(); accumulator = 0; collisionCount = 0;
+    selected = car; keys.clear(); accumulator = 0; collisionCount = 0;
     clearHover();
     const previousControl = controlled.get(car);
     motion = previousControl?.motion ?? createVehicleMotion(state, car.model.position.x, car.model.position.z, car.model.rotation.y);
@@ -438,7 +458,7 @@ export function createDrivingController(
     // The vehicle remains exactly where the player left it and physically slows
     // down/rejoins a lane. A distant road is never used as a teleport target.
     if (motion) controlled.set(selected, { motion, age: .5, route: null, routeTimer: 0 });
-    selected = null; motion = null; keys.clear(); label = '';
+    selected = null; motion = null; keys.clear();
     emitStatus(true);
   }
 
@@ -657,6 +677,7 @@ export function createDrivingController(
       state = next; collisionWorldFor(next).setState(next); camera.far = Math.max(500, next.size * 4); camera.updateProjectionMatrix();
     },
     hover, leaveHover() { pointerOverCanvas = false; if (hovered) missedHover = .8; }, clearHover, enter, exit, update, getStatus,
+    refreshLocale() {for(const car of getCars())refreshVehicleLabel(car.model);projectHover(true);emitStatus(true);},
     keyDown(code) {
       if (!selected || !driveKeys.has(code)) return false;
       if (code === 'Escape') exit(); else keys.add(code);

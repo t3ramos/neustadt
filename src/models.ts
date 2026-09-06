@@ -938,12 +938,8 @@ export function createTileModel(tile: Tile, state: CityState): THREE.Group {
     default: break;
   }
   if (FACILITY_FOOTPRINTS[tile.kind] || tile.level > 0 && ['residential', 'commercial', 'industrial'].includes(tile.kind)) addBuildingWindowLights(g, tile);
-  // Fire meshes can be recolored/batched by the caller like every other model.
-  if (tile.fire > 0) {
-    mesh(g, coneGeometry, 0xf4a646, -.08, .48, .10, .31, .65, .29);
-    mesh(g, coneGeometry, 0xe8733f, .12, .34, .17, .24, .49, .25);
-    mesh(g, sphereGeometry, 0x666a63, .04, .96, .11, .46, .44, .44);
-  }
+  // Burning buildings retain their geometry; fire-effects owns animated flames,
+  // smoke and embers independently of these shared static model primitives.
   return g;
 }
 
