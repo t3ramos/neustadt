@@ -4,7 +4,31 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 export const MAX_IMPACT_DEBRIS = 48;
 export const IMPACT_DEBRIS_SECONDS = 12;
-export const DISMEMBERMENT_SPEED = 5.5;
+// Preserve the game's existing effective gravity, with one world unit = ten metres.
+// Share both values with the ragdoll integrator so fall calibration cannot drift.
+export const CITIZEN_WORLD_GRAVITY = 9.82 * 0.29;
+export const CITIZEN_AIR_DAMPING = 0.15;
+export const DISMEMBERMENT_DROP_HEIGHT = 1;
+
+/** Speed after falling through a height with Cannon's exponential air damping.
+ * v(t)=g/k*(1-exp(-kt)); h(t)=g/k*(t-(1-exp(-kt))/k).
+ * The ten-metre target gives approximately 2.279 world units per second. */
+export function citizenFallImpactSpeed(height: number): number {
+  if (!Number.isFinite(height) || height <= 0) return 0;
+  const k = -Math.log1p(-CITIZEN_AIR_DAMPING),
+    terminal = CITIZEN_WORLD_GRAVITY / k;
+  let low = 0,
+    high = 1;
+  const distance = (time: number) => terminal * (time + Math.expm1(-k * time) / k);
+  while (distance(high) < height) high *= 2;
+  for (let i = 0; i < 48; i++) {
+    const mid = (low + high) / 2;
+    if (distance(mid) < height) low = mid;
+    else high = mid;
+  }
+  return -terminal * Math.expm1((-k * (low + high)) / 2);
+}
+export const DISMEMBERMENT_SPEED = citizenFallImpactSpeed(DISMEMBERMENT_DROP_HEIGHT);
 /** Vehicles use their actual sweep speed; 1 world unit represents ten metres. */
 export const VEHICLE_DISMEMBERMENT_SPEED = 1.4;
 const specs = {

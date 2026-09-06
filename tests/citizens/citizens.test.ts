@@ -779,11 +779,11 @@ test('holding ignores ground, release restores collision and clears below-ground
   doll.dispose();
 });
 
-test('ordinary one-unit free fall lands and settles without fatal disappearance', () => {
+test('ordinary three-metre free fall lands and settles without fatal disappearance', () => {
   const world = createCitizenPhysicsWorld();
   floor(world);
   let impacts = 0;
-  const doll = new CitizenRagdoll(world, { x: 0, y: 1, z: 0 }, 0, CITIZEN_SCALE, () => impacts++);
+  const doll = new CitizenRagdoll(world, { x: 0, y: 0.3, z: 0 }, 0, CITIZEN_SCALE, () => impacts++);
   doll.release({ x: 0, y: 0, z: 0 });
   step(world, 4);
   assert.equal(impacts, 0);

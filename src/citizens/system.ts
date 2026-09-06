@@ -2,7 +2,13 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as CANNON from 'cannon-es';
-import { ImpactDebris, DISMEMBERMENT_SPEED, VEHICLE_DISMEMBERMENT_SPEED } from './impact-debris';
+import {
+  ImpactDebris,
+  DISMEMBERMENT_SPEED,
+  VEHICLE_DISMEMBERMENT_SPEED,
+  CITIZEN_WORLD_GRAVITY,
+  CITIZEN_AIR_DAMPING,
+} from './impact-debris';
 import { createTileModel } from '../rendering/buildings/models';
 import { createDrivingCollisionWorld } from '../vehicles/collisions';
 import { facilityAccessSignature } from '../buildings/facility-access';
@@ -278,7 +284,7 @@ const dimensions: Record<
 
 export function createCitizenPhysicsWorld(): CANNON.World {
   const world = new CANNON.World({
-    gravity: new CANNON.Vec3(0, -9.82 * CITIZEN_SCALE, 0),
+    gravity: new CANNON.Vec3(0, -CITIZEN_WORLD_GRAVITY, 0),
     allowSleep: true,
   });
   world.broadphase = new CANNON.SAPBroadphase(world);
@@ -340,7 +346,7 @@ export class CitizenRagdoll {
           origin.y + oy * scale,
           origin.z + (-ox * Math.sin(heading) + oz * Math.cos(heading)) * scale,
         ),
-        linearDamping: 0.15,
+        linearDamping: CITIZEN_AIR_DAMPING,
         angularDamping: 0.38,
         collisionFilterGroup: PERSON_GROUP,
         collisionFilterMask: GROUND_GROUP | BUILDING_GROUP,
@@ -754,6 +760,7 @@ interface Held {
   last: THREE.Vector3;
   velocity: THREE.Vector3;
   lastTime: number;
+  lastMotionTime: number;
   start: THREE.Vector3;
 }
 interface Particle {
@@ -2196,6 +2203,7 @@ export function createCitizens(
       last: target.clone(),
       velocity: new THREE.Vector3(),
       lastTime: time,
+      lastMotionTime: time,
       start: origin,
     };
     hovered = citizen;
@@ -2213,10 +2221,17 @@ export function createCitizens(
     if (!hit) return true;
     hit.add(held.offset);
     hit.y = clamp(hit.y, -5, 50);
-    const dt = clamp((time - held.lastTime) / 1000, 0.008, 0.2);
-    const movement = hit.clone().sub(held.last).divideScalar(dt);
-    if (movement.length() > MAX_HAND_SPEED) movement.setLength(MAX_HAND_SPEED);
-    held.velocity.copy(movement);
+    const movement = hit.clone().sub(held.last);
+    // Pointer-up supplies the final coordinates again. A duplicate sample is
+    // not a stopped hand: retain the recent real motion, but do not extend its
+    // lifetime. A genuine pause still expires it in pointerUp below.
+    if (movement.lengthSq() > 1e-10) {
+      const dt = clamp((time - held.lastTime) / 1000, 0.008, 0.2);
+      movement.divideScalar(dt);
+      if (movement.length() > MAX_HAND_SPEED) movement.setLength(MAX_HAND_SPEED);
+      held.velocity.copy(movement);
+      held.lastMotionTime = time;
+    }
     held.last.copy(hit);
     held.lastTime = time;
     held.target.copy(hit);
@@ -2231,7 +2246,7 @@ export function createCitizens(
       ragdoll = citizen.ragdoll;
     if (!ragdoll) return true;
     const p = ragdoll.position;
-    if (time - current.lastTime > 140) current.velocity.set(0, 0, 0);
+    if (time - current.lastMotionTime > 140) current.velocity.set(0, 0, 0);
     if (Math.abs(p.x) > state.size / 2 || Math.abs(p.z) > state.size / 2) {
       incident(citizen, 'abduction', p, { x: 0, y: 1, z: 0 });
       return true;

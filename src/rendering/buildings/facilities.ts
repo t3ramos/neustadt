@@ -1,3 +1,4 @@
+import { addMeadowFlowers } from './meadow-flowers';
 import { createCar } from './service-vehicles';
 import * as THREE from 'three';
 import type { Tile } from '../../domain/types';
@@ -261,26 +262,7 @@ export function park(g: THREE.Group, tile: Tile): void {
       const z = (((seed >>> 10) % 55) - 27) / 100;
       const px = verticalWalk && Math.abs(x) < 0.18 ? (x < 0 ? -0.25 : 0.25) : x;
       const pz = horizontalWalk && Math.abs(z) < 0.18 ? (z < 0 ? -0.25 : 0.25) : z;
-      const foliage = mesh(g, crownGeometry, 0x73955f, px, 0.033, pz, 0.2, 0.014, 0.15, seed % 6);
-      foliage.castShadow = false;
-      foliage.userData.drivingSurface = true; // Soft ground cover, not a solid obstacle.
-      for (let i = 0; i < 3; i++) {
-        const angle = (seed % 17) * 0.37 + i * 2.3;
-        const flower = mesh(
-          g,
-          crownGeometry,
-          [0xd5a1bd, 0xe7c66e, 0xe6e1ce][(seed + i) % 3],
-          px + Math.cos(angle) * 0.059,
-          0.046 + i * 0.002,
-          pz + Math.sin(angle) * 0.045,
-          0.043,
-          0.016,
-          0.037,
-          angle,
-        );
-        flower.castShadow = false;
-        flower.userData.drivingSurface = true;
-      }
+      addMeadowFlowers(g, px, pz, seed);
     }
     return;
   }
