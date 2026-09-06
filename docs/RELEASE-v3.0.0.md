@@ -21,7 +21,7 @@ Neustadt 3.0 introduces a populated New York scenario, a spacious seeded start f
 - **Architecture and responsiveness.** Application, UI, simulation, persistence, rendering, traffic, vehicles, citizens, world generation, and audio now have explicit module ownership. Economic steps run in a Web Worker with one request in flight and revision/epoch checks against stale results. Scene chunk updates use a cooperative four-millisecond budget, while initial scene creation remains synchronous. CPU timing and optional asynchronous GPU timing expose costs without guaranteeing a frame rate. See the [architecture guide](ARCHITECTURE.md).
 
 - **City structure and density.** New York now has a coherent core, medium-rise belt, and suburbs. Residential, commercial, and industrial zoning each offer three floating density buttons with building-level caps of 1/2/4. Medium-density commerce has five office families and four-sided material windows without added window meshes.
-- **Bounded world and visible activity.** The finite earth slab has closed edges and underside, and the renderer no longer uses screen-space ambient occlusion. Pedestrian placement favors developed street frontages and culls off-camera rendering; instanced traffic supports up to 70 ordinary cars where roads allow. The isolated Easter Egg model preview returns to the city without adopting a new scenario.
+- **Bounded world and visible activity.** The finite earth slab has closed edges and underside, and the renderer no longer uses screen-space ambient occlusion. Pedestrian placement favors developed street frontages and culls off-camera rendering; instanced traffic supports up to 70 ordinary cars where roads allow. The hidden city-menu discovery opens an isolated model preview with a return to the existing city.
 
 - **Latest Easter Egg and actor changes.** The office landmark now targets the fourth qualifying medium-density commercial opening with a clear landscaped frontage. New York receives the new forecourt layout; explicit relocation is available to code callers, not silently applied when loading a save. The live city has been verified with 720 pedestrians. Gait, ordinary-fall recovery, strong-impact debris, and road geometry have dedicated regression coverage. Strong fictional impacts use six body-part fragments per affected figure, bounded to 48 active fragments with a 12-second lifetime.
 
@@ -53,7 +53,7 @@ Neustadt 3.0 bringt eine bewohnte New-York-Vorlage, einen großzügigen Seed-Sta
 
 ## Verification / Prüfung
 
-- 643 automated tests passed, including simulation, save migration, whole-lot density, road geometry and vehicle contact, park-path obstacles, ordinary fall recovery and bounded impact debris.
+- 645 automated tests passed, including simulation, save migration, whole-lot density, road geometry and vehicle contact, park-path obstacles, ordinary fall recovery and bounded impact debris.
 - Production build, TypeScript, Prettier and module-boundary checks passed.
 - Browser checks covered the existing large city, save/reload, the 40-to-128 expansion preserving 21 built road tiles, the relocated office, floating density controls, day/night/rain rendering and representative road/building/airport views.
 - Simulation runs in a Web Worker; rendering remains WebGL on the browser thread. Performance depends on hardware, viewport and scene. The release does not claim hardware ray tracing or exact reflections of surrounding buildings.

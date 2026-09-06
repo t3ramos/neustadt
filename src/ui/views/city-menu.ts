@@ -80,7 +80,7 @@ export function renderCityMenuView(
     <span>${tr('NEUSTADT · REGIONEN & STADTLEBEN', 'NEUSTADT · REGIONS & CITY LIFE')} · v${appVersion}</span>
     <button id="menu-help" class="text-link">${tr('Spielanleitung', 'How to play')} ${icon('arrow-up-right')}</button>
     </div>
-    <div class="easter-egg-action">
+    <div class="easter-egg-action" id="menu-landmark-secret" hidden>
     <button id="menu-easter-egg" class="text-link">Easter Egg</button>
     </div>`;
 }

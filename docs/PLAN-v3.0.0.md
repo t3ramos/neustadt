@@ -49,7 +49,7 @@ Die Markierungen beschreiben vorhandene Implementierung, nicht die abschließend
 - [x] Zusammenhängender New-York-Kern, mittelhoher Gürtel und Vororte; drei Dichten für Wohnen/Gewerbe/Industrie mit Stufengrenzen 1/2/4 und drei schwebenden Auswahlknöpfen.
 - [x] Fünf mitteldichte Bürofamilien, Fenster auf allen vier Wandseiten ohne zusätzliche Fenstermeshes, endliche geschlossene Erdplatte und Rendering ohne Screen-Space-Ambient-Occlusion.
 - [x] Instanzierte Verkehrsdarstellung mit bis zu 70 gewöhnlichen Autos bei ausreichendem Straßennetz; Fußgängerverteilung nach bebauter Straßenfront und Auslassen der Darstellung außerhalb der Kamera.
-- [x] Isolierte Easter-Egg-Modellvorschau aus Start-/Stadtmenü mit Rückkehr zur Stadt, ohne Übernahme eines neuen Szenarios.
+- [x] Isolierte Easter-Egg-Modellvorschau über den verborgenen Eintrag im Stadtmenü mit Rückkehr zur Stadt, ohne Übernahme eines neuen Szenarios.
 - [x] Englische und deutsche README, Architekturübersicht, neutrale Assetnamen und vorläufige Release-Notizen; Formatierung, Architekturprüfung und rekursiver Testlauf als Projektbefehle.
 - [x] 720 Fußgänger in der laufenden Stadt bestätigt; daraus folgt keine allgemeine Leistungszusage.
 - [ ] Neueste 128er-Startlandschaft mit breitem ebenem Zentrum und Bergen außen abschließend prüfen.
@@ -68,7 +68,7 @@ Zwischenmessungen einzelner Browserläufe bleiben vorläufige QA-Belege. Sie sin
 - Simulation im echten Web Worker; versionierte Antworten, Schutz vor veralteten Ergebnissen, begrenzte Warteschlange. Gebäude-Neuaufbau inkrementell mit Frame-Budget; CPU/GPU und Nacht-Regen-Performance messen.
 - Einheitliche englische README ohne deutschen Begriffs-/Preiskatalog, gleichwertige deutsche README, Projektname bleibt Neustadt.
 - Ausschließlich neutrale Bezeichnung Easter Egg in Code, Dateinamen, Metadaten und Dokumentation. Einzigartiges kommerzielles 3×2-Gebäude mit Straßenorientierung und vollständiger Rückseite. Hoher Fassadenschriftzug, geteiltes Dach mit Technik/Solar, überdachtem Zwischenbereich, möblierter Terrasse und Glasgeländern.
-- Isolierte Easter-Egg-Modellvorschau mit Rückkehr zur Stadt im Start-/Stadtmenü, ohne beim bloßen Erkunden stillschweigend die neue Stadt zu übernehmen.
+- Isolierte Easter-Egg-Modellvorschau mit Rückkehr zur Stadt über den verborgenen Eintrag im Stadtmenü, ohne beim bloßen Erkunden stillschweigend die neue Stadt zu übernehmen.
 - Ländliche Gewerbegrundstücke als dauerhaft gespeicherte Bauernhöfe; Wiesen, Gras, Wildblumen und Felsen in der New-York-Umgebung.
 - Originale leise Hintergrundmusik, Wetter-/Stadtatmosphäre, Fahrmotor und ortsabhängige Anlagen-/Fahrzeuggeräusche; getrennte Lautstärkeregler.
 - Grundverschiedene Hochhausfassaden und Materialien. Flughafenvarianten und komplette Fluganimation auf freie Roll-/Flugwege prüfen.
@@ -76,6 +76,6 @@ Zwischenmessungen einzelner Browserläufe bleiben vorläufige QA-Belege. Sie sin
 
 ## Release-Abnahme vom 6. September 2026
 
-Feature-Umfang eingefroren. 643 Tests, TypeScript, Produktionsbuild, Formatierung und Modulgrenzen erfolgreich geprüft. Die automatisierten Prüfungen decken insbesondere die neue Startfläche, verlustfreie Kartenerweiterung, Fußgängerwege, sichere normale Stürze, starke Aufpralle, Dichtewachstum und tatsächliche Straßen-/Kollisionsgeometrie ab. Repräsentative Browseransichten von Tag, Nacht, Regen, Kurven, Hochhäusern, Flughafen und Büro-Easter-Egg wurden beurteilt. Die bestehenden Nutzerstädte blieben erhalten; Bergtal wurde mit allen 21 Straßenfeldern auf 128 erweitert, das Büro in New York ausdrücklich an die Parkfront versetzt. Veröffentlichung erfolgt über CI, GitHub Pages und Release v3.0.0.
+Feature-Umfang eingefroren. 645 Tests, TypeScript, Produktionsbuild, Formatierung und Modulgrenzen erfolgreich geprüft. Die automatisierten Prüfungen decken insbesondere die neue Startfläche, verlustfreie Kartenerweiterung, Fußgängerwege, sichere normale Stürze, starke Aufpralle, Dichtewachstum und tatsächliche Straßen-/Kollisionsgeometrie ab. Repräsentative Browseransichten von Tag, Nacht, Regen, Kurven, Hochhäusern, Flughafen und Büro-Easter-Egg wurden beurteilt. Die bestehenden Nutzerstädte blieben erhalten; Bergtal wurde mit allen 21 Straßenfeldern auf 128 erweitert, das Büro in New York ausdrücklich an die Parkfront versetzt. Veröffentlichung erfolgt über CI, GitHub Pages und Release v3.0.0.
 
 Die früheren Checklisten dokumentieren Zwischenstände; diese Abnahme beschreibt den finalen Umfang. Nicht beansprucht werden hardwarebeschleunigtes Raytracing, vollständige Umgebungsreflexionen oder eine hardwareunabhängig garantierte Bildrate.

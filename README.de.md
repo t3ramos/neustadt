@@ -54,7 +54,7 @@ Audioeinstellungen werden im Browser getrennt von Stadtexporten gespeichert. Pau
 
 ## Ein architektonisches Easter Egg
 
-Das Bürogebäude als Easter Egg entsteht beim vierten geeigneten Gewerbeneubau mittlerer Dichte, sofern sein Sechsfeldgrundstück und eine freie Vorderseite Platz finden. Es richtet sich zu einem begrünten Vorplatz und zur Straße aus. Pro Karte gibt es höchstens eines; das New-York-Szenario enthält es bereits. Es basiert auf dem **linken Bürogebäude** der bereitgestellten Blender-Quelle, ergänzt dessen unfertige Fassaden und trägt den originalen Schriftzug hoch an der Vorderseite. Start- und Stadtmenü bieten eine isolierte Modellvorschau mit Rückkehr zur Stadt. Das Erkunden übernimmt keine neue Stadt.
+Das Bürogebäude als Easter Egg entsteht beim vierten geeigneten Gewerbeneubau mittlerer Dichte, sofern sein Sechsfeldgrundstück und eine freie Vorderseite Platz finden. Es richtet sich zu einem begrünten Vorplatz und zur Straße aus. Pro Karte gibt es höchstens eines; das New-York-Szenario enthält es bereits. Es basiert auf dem **linken Bürogebäude** der bereitgestellten Blender-Quelle, ergänzt dessen unfertige Fassaden und trägt den originalen Schriftzug hoch an der Vorderseite. Der Menüeintrag bleibt bis zur Entdeckung im Stadtmenü verborgen. Die isolierte Modellvorschau führt zurück in die bestehende Stadt.
 
 Die [Easter-Egg-Assetdokumentation](public/assets/models/easter-egg-office-README.md) beschreibt Herkunft, Änderungen, technische Budgets und Reproduktion. Die ursprüngliche Quelldatei bleibt unverändert. Die Nutzung des Namens und Schriftzugs überträgt keine Markenrechte.
 

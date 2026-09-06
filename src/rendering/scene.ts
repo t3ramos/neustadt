@@ -2361,9 +2361,7 @@ export function createCityScene(
         depth = Math.max(...bounds.map((p) => p.z)) - minZ + 1;
       const ground = Math.max(0, tile.elevation),
         target = new THREE.Vector3(minX - half + width / 2, ground + 0.55, minZ - half + depth / 2);
-      // Tall neighbors can completely hide a low landmark at the normal city angle.
-      // A near-vertical approach keeps the viewing ray inside this lot until it is
-      // above the surrounding roofs. Orthographic zoom still determines its size.
+      // Keep the office's facade and rooftop visible from its street-facing side.
       controls.minPolarAngle = Math.min(controls.minPolarAngle, 0.035);
       const offset = new THREE.Vector3(-5.5, 8, 8).applyAxisAngle(
         new THREE.Vector3(0, 1, 0),
@@ -2379,6 +2377,16 @@ export function createCityScene(
         controls.minZoom,
         controls.maxZoom,
       );
+      // The ordinary city view has an asymmetric frustum for its sidebar layout.
+      // Its center is NOT divided by zoom by Three.js, so at close-up zoom a point
+      // on the orbit target can project beyond the right edge. Center the close-up
+      // frustum, keeping the true building center as the orbit pivot.
+      const viewWidth = camera.right - camera.left;
+      const viewHeight = camera.top - camera.bottom;
+      camera.left = -viewWidth / 2;
+      camera.right = viewWidth / 2;
+      camera.top = viewHeight / 2;
+      camera.bottom = -viewHeight / 2;
       camera.updateProjectionMatrix();
       controls.update();
       selected = { x: tile.x, z: tile.z };

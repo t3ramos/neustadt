@@ -54,7 +54,7 @@ Audio preferences are saved in the browser, separately from city exports. Pausin
 
 ## A small architectural Easter egg
 
-An office-building Easter Egg appears at the fourth qualifying medium-density commercial opening, provided its six-tile lot and clear frontage fit. It faces a landscaped forecourt and street. At most one exists on a map, and the New York scenario includes it. It adapts the **left office building** from the supplied Blender source, completes its unfinished elevations, and places the original wordmark high on the front facade. An isolated model preview is available from the start and city menus, with a return to the city; exploring it does not adopt a new city.
+An office-building Easter Egg appears at the fourth qualifying medium-density commercial opening, provided its six-tile lot and clear frontage fit. It faces a landscaped forecourt and street. At most one exists on a map, and the New York scenario includes it. It adapts the **left office building** from the supplied Blender source, completes its unfinished elevations, and places the original wordmark high on the front facade. Its menu entry is hidden until discovered in the city menu. The isolated model preview returns to the existing city.
 
 See the [Easter Egg asset notes](public/assets/models/easter-egg-office-README.md) for source identity, modifications, technical budgets, and reproduction details. The original source remains unchanged. Inclusion of the original wordmark does not grant trademark rights.
 

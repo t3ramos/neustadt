@@ -1,3 +1,4 @@
+import { bindLandmarkDiscovery } from '../ui/landmark-unlock';
 import { showEasterEggPreview } from '../ui/easter-egg-preview';
 import { createAudioSession } from './audio-session';
 import { renderAudioView } from '../ui/views/audio';
@@ -875,7 +876,6 @@ function renderModal() {
     $('.close-modal').hidden = true;
     $('#adopt-new-york').onclick = () => beginCity(state, false);
     $('#found-own-city').onclick = () => dialogs.open('newcity');
-    $('#welcome-easter-egg').onclick = focusEasterEgg;
   } else if (dialogs.page === 'newcity') {
     dialogs.render(
       tr('Hier beginnt deine Stadt.', 'This is where your city begins.'),
@@ -1177,6 +1177,7 @@ function wireEvents(includeGlobal = true) {
     (e.target as HTMLInputElement).value = '';
   };
   if (!includeGlobal) return;
+  bindLandmarkDiscovery();
   $('#world').addEventListener(
     'pointerdown',
     () => {

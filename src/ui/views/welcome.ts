@@ -18,7 +18,5 @@ export function renderWelcomeView(state: CityState) {
     <button id="found-own-city" class="button secondary">${icon('sprout')} ${tr('Eigene Stadt gründen', 'Found your own city')}</button>
     </div>
     <small class="welcome-footnote">${tr('Dein Fortschritt wird lokal in diesem Browser gespeichert.', 'Your progress is saved locally in this browser.')}</small>
-    <div class="easter-egg-action">
-    <button id="welcome-easter-egg" class="text-link">Easter Egg</button>
-    </div>`;
+`;
 }
