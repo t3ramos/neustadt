@@ -382,6 +382,23 @@ export function generateNewYorkCity(): CityState {
     timeOfDay: 14,
     buildingLights: true,
   };
+  // Rotate the authored map itself, including facades and complete multi-tile lots.
+  // Anchors must remain the top-left cell of each rotated footprint.
+  const rotatedAnchors = new Map<number, number>();
+  for (const tile of city.tiles) {
+    if (tile.anchor < 0) continue;
+    const index = (size - 1 - tile.z) * size + size - 1 - tile.x;
+    rotatedAnchors.set(tile.anchor, Math.min(rotatedAnchors.get(tile.anchor) ?? index, index));
+  }
+  city.tiles = city.tiles
+    .map((tile) => ({
+      ...tile,
+      x: size - 1 - tile.x,
+      z: size - 1 - tile.z,
+      rotation: ((tile.rotation + 2) % 4) as 0 | 1 | 2 | 3,
+      anchor: tile.anchor < 0 ? -1 : rotatedAnchors.get(tile.anchor)!,
+    }))
+    .reverse();
   recalculate(city);
   city.progression = createProgression();
   city.milestone = 0;

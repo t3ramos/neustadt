@@ -130,6 +130,7 @@ let loadNotice = '';
 let saveBlocked = false;
 let recoveryRaw: string | null = null;
 let savePending = false;
+let saveQueued = false;
 let saveFailed = false;
 let nextAutosave = Date.now() + 30000;
 let saveDebounce: ReturnType<typeof setTimeout>;
@@ -290,6 +291,7 @@ async function save(show = true) {
     return;
   }
   if (savePending) {
+    saveQueued = true;
     if (show)
       toast(tr('Deine Stadt wird bereits gespeichert.', 'Your city is already being saved.'));
     return;
@@ -321,6 +323,10 @@ async function save(show = true) {
     saveFailed = true;
   } finally {
     savePending = false;
+    if (saveQueued) {
+      saveQueued = false;
+      void save(false);
+    }
   }
 }
 
@@ -967,6 +973,18 @@ function renderModal() {
       $<HTMLInputElement>('#import-file').click();
     };
     $('#menu-new').onclick = () => dialogs.open('newcity');
+    $('#menu-reset').onclick = () => {
+      if (
+        !window.confirm(
+          tr(
+            'Auf die ursprüngliche Startstadt Kassel zurücksetzen? Dein aktueller Spielstand wird ersetzt. Wenn du ihn behalten möchtest, wähle zuerst „Spielstand exportieren“.',
+            'Reset to the original starter city Kassel? Your current save will be replaced. To keep it, choose “Export save” first.',
+          ),
+        )
+      )
+        return;
+      beginCity(generateNewYorkCity(), false);
+    };
     $('#menu-expand')?.addEventListener('click', () => {
       const nextSize = nextCitySize(state.size);
       if (nextSize === null) return;

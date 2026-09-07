@@ -63,6 +63,12 @@ export function renderCityMenuView(
           ]
         : []),
       [
+        'menu-reset',
+        'rotate-ccw',
+        tr('Auf Startstadt zurücksetzen', 'Reset to starter city'),
+        tr('Kassel im ursprünglichen Zustand starten', 'Restart the original Kassel'),
+      ],
+      [
         'menu-photo',
         'camera',
         tr('Stadt fotografieren', 'Take a photo'),

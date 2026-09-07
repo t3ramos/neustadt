@@ -89,15 +89,15 @@ test('New York landmark faces street then Central Park and retains its open diag
   const root = city.tiles.find(
     (t) => t.variation === EASTER_EGG_BUILDING_VARIATION && t.anchor === t.z * city.size + t.x,
   )!;
-  assert.equal(root.rotation, 2);
+  assert.equal(root.rotation, 0);
   assert.equal(root.zoneDensity, 'medium');
   assert.equal(root.level, 2);
   const foreground = [];
   for (let distance = 1; distance <= 5; distance++)
     for (let lateral = -distance; lateral < 3 + distance; lateral++)
-      foreground.push(city.tiles[(root.z - distance) * city.size + root.x + lateral]);
+      foreground.push(city.tiles[(root.z + 1 + distance) * city.size + root.x + lateral]);
   for (let x = root.x; x < root.x + 3; x++)
-    assert.equal(city.tiles[(root.z - 1) * city.size + x].kind, 'road');
+    assert.equal(city.tiles[(root.z + 2) * city.size + x].kind, 'road');
   assert.ok(foreground.every((t) => ['park', 'water', 'road'].includes(t.kind)));
   const initial = foreground.map((t) => t.kind);
   for (let step = 0; step < 120; step++) tick(city);
@@ -106,7 +106,7 @@ test('New York landmark faces street then Central Park and retains its open diag
     initial,
   );
   assert.ok(root.level <= 2);
-  assert.equal(root.rotation, 2);
+  assert.equal(root.rotation, 0);
   deserializeCity(serializeCity(city));
 });
 

@@ -2,6 +2,7 @@ import { createWaterRecreation } from './world/recreation';
 import { routeForWaterBody, sampleWaterRoute } from './world/water-routes';
 import { createWorldChunks } from './scene/world-chunks';
 import * as THREE from 'three';
+import { createFrameLimiter } from './frame-limit';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { batchGroup, disposeGroup } from './scene/geometry';
 import { createBuildingChunks } from './scene/building-chunks';
@@ -2063,10 +2064,15 @@ export function createCityScene(
   const audioPosition = new THREE.Vector3(),
     audioRight = new THREE.Vector3();
   let requestId = 0;
+  const shouldRenderFrame = createFrameLimiter(60);
   const workFrustum = new THREE.Frustum(),
     workProjection = new THREE.Matrix4();
   function animate(timestamp: number) {
     if (disposed) return;
+    if (!shouldRenderFrame(timestamp)) {
+      requestId = requestAnimationFrame(animate);
+      return;
+    }
     const frameStarted = performance.now();
     metrics.record('frameInterval', timestamp - previousTime);
     workFrustum.setFromProjectionMatrix(

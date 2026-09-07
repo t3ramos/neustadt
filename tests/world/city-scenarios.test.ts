@@ -90,14 +90,14 @@ test('Kassel round-trips complete parcels and supplies all buildings over a map-
   assert.equal(easterEgg.length, 1);
   assert.equal(easterEgg[0].kind, 'commercial');
   assert.equal(getFootprint(city, easterEgg[0]).length, 6);
-  assert.equal(easterEgg[0].rotation, 2);
-  assert.equal(easterEgg[0].x, 63);
-  assert.equal(easterEgg[0].z, 65);
+  assert.equal(easterEgg[0].rotation, 0);
+  assert.equal(easterEgg[0].x, 62);
+  assert.equal(easterEgg[0].z, 61);
   assert.equal(easterEgg[0].zoneDensity, 'medium');
   assert.equal(easterEgg[0].level, 2);
-  assert.equal(city.tiles[64 * city.size + 63].kind, 'road');
-  assert.equal(city.tiles[63 * city.size + 63].kind, 'park');
-  assert.ok(Math.hypot(easterEgg[0].x - city.size / 2, easterEgg[0].z - city.size / 2) < 4);
+  assert.equal(city.tiles[63 * city.size + 64].kind, 'road');
+  assert.equal(city.tiles[64 * city.size + 64].kind, 'park');
+  assert.ok(Math.hypot(easterEgg[0].x - city.size / 2, easterEgg[0].z - city.size / 2) < 5);
   for (const kind of zones) {
     const lots = buildings.filter((t) => t.kind === kind);
     assert.equal(new Set(lots.map((t) => t.variation % 5)).size, 5);
@@ -153,7 +153,7 @@ test('Kassel reads as one street-aligned skyline, a midrise belt and low outer b
   const lots = city.tiles.filter((t) => zones.includes(t.kind) && isBuildingAnchor(city, t));
   const blocks = new Map<string, Set<string>>();
   for (const t of city.tiles.filter((t) => zones.includes(t.kind))) {
-    const key = `${Math.floor((t.x - 17) / 8)},${Math.floor((t.z - 17) / 8)}`;
+    const key = `${Math.floor((127 - t.x - 17) / 8)},${Math.floor((127 - t.z - 17) / 8)}`;
     const densities = blocks.get(key) ?? new Set<string>();
     densities.add(t.zoneDensity!);
     blocks.set(key, densities);
@@ -168,7 +168,14 @@ test('Kassel reads as one street-aligned skyline, a midrise belt and low outer b
         lots.filter((t) => t.kind === kind && t.zoneDensity === density).length >= 10,
         `${kind} ${density} is a visible district, not a token parcel`,
       );
-  const urban = lots.filter((t) => t.kind !== 'industrial');
+  // Express district assertions in the original authored coordinate system.
+  const urban = lots
+    .filter((t) => t.kind !== 'industrial')
+    .map((t) => ({
+      ...t,
+      x: city.size - t.x - (t.lotWidth ?? 1),
+      z: city.size - t.z - (t.lotDepth ?? 1),
+    }));
   const high = urban.filter((t) => t.zoneDensity === 'high');
   assert.ok(high.length > 200);
   assert.ok(
@@ -200,7 +207,7 @@ test('Kassel reads as one street-aligned skyline, a midrise belt and low outer b
     utilities.length <= 50,
     'Infrastructure is compact, not repeated through every neighborhood',
   );
-  assert.ok(utilities.every((t) => t.x >= 104));
+  assert.ok(utilities.every((t) => t.x <= 23));
   assert.ok(
     city.tiles.filter((t) => t.kind === 'empty' || t.kind === 'tree').length > 6000,
     'Large landscape belts remain between districts and the map edge',

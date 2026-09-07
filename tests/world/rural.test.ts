@@ -126,10 +126,8 @@ test('Kassel has a served agricultural fringe, meadow relief and deterministic b
   const city = generateNewYorkCity(),
     farms = city.tiles.filter((t) => isBuildingAnchor(city, t) && isRuralCommercial(city, t));
   assert.ok(farms.length >= 6);
-  assert.ok(farms.every((t) => t.x >= 106 && t.connected && t.powered && t.watered));
-  const fringe = city.tiles.filter(
-    (t) => t.x >= 106 && t.x < 124 && t.z < 80 && t.kind === 'empty',
-  );
+  assert.ok(farms.every((t) => t.x < 22 && t.connected && t.powered && t.watered));
+  const fringe = city.tiles.filter((t) => t.x <= 21 && t.x > 3 && t.z > 47 && t.kind === 'empty');
   assert.ok(fringe.length > 350);
   assert.ok(fringe.some((t) => t.elevation > 0));
   const loaded = deserializeCity(serializeCity(city));
@@ -141,7 +139,7 @@ test('Kassel has a served agricultural fringe, meadow relief and deterministic b
     flowers = 0,
     rocks = 0;
   for (let z = 0; z < city.size; z += 16) {
-    const chunk = buildLandscapeChunk(city, 112, z, 16);
+    const chunk = buildLandscapeChunk(city, 0, z, 16);
     try {
       grass += chunk.userData.grassCount;
       flowers += chunk.userData.flowerCount;
@@ -217,14 +215,14 @@ test('first simulation growth assigns a saved farm and zoning undo owns the whol
   city.tax = 0;
   recalculate(city);
   const points = [];
-  for (let z = 14; z < 16; z++)
-    for (let x = 117; x < 120; x++) {
+  for (let z = 112; z < 114; z++)
+    for (let x = 8; x < 11; x++) {
       points.push({ x, z });
       Object.assign(city.tiles[z * city.size + x], { kind: 'empty', elevation: 0 });
     }
   // Open country needs a real feeder; only enclosed street blocks auto-distribute power.
-  for (let z = 13; z <= 15; z++)
-    Object.assign(city.tiles[z * city.size + 117], { hasPowerLine: true, hasPipe: true });
+  for (let z = 112; z <= 114; z++)
+    Object.assign(city.tiles[z * city.size + 10], { hasPowerLine: true, hasPipe: true });
   const before = captureConstructionState(city),
     history: Parameters<typeof undoConstruction>[1] = [];
   const built = build(city, points, 'commercial');
@@ -236,7 +234,7 @@ test('first simulation growth assigns a saved farm and zoning undo owns the whol
     t.age = 10;
   }
   recordConstruction(history, before, city, 'commercial', built);
-  let farm = city.tiles[14 * city.size + 117];
+  let farm = city.tiles[112 * city.size + 8];
   for (let step = 0; step < 40 && farm.level === 0; step++) {
     for (const p of points)
       if (p.x !== farm.x || p.z !== farm.z) city.tiles[p.z * city.size + p.x].age = 0;
@@ -247,10 +245,10 @@ test('first simulation growth assigns a saved farm and zoning undo owns the whol
   assert.equal(farm.ruralCommercial, true);
   farm.level = 4;
   syncZoneLot(city, farm);
-  Object.assign(city.tiles[13 * city.size + 117], { kind: 'residential', level: 1 });
+  Object.assign(city.tiles[114 * city.size + 10], { kind: 'residential', level: 1 });
   recalculate(city);
   const loaded = deserializeCity(serializeCity(city));
-  assert.ok(isRuralCommercial(loaded, loaded.tiles[14 * city.size + 117]));
+  assert.ok(isRuralCommercial(loaded, loaded.tiles[112 * city.size + 8]));
   assert.ok(undoConstruction(city, history).ok);
   for (const p of points) {
     const t = city.tiles[p.z * city.size + p.x];
