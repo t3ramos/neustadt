@@ -8,7 +8,7 @@
 
 Neustadt is an independent, open-source city-building simulation by [t3ramos](https://github.com/t3ramos). Build roads and utilities, shape the terrain, balance public services, and guide a town into a metropolis. Then explore the result from street level by driving one of its vehicles. The German name means “new town”; the game is fully playable in English and German.
 
-This README describes the v3.0.0 development version. Publication and final release verification are still pending; the [release notes](docs/RELEASE-v3.0.0.md) track that status.
+This README describes v3.1.0. See the [release notes](docs/RELEASE-v3.1.0.md) for the graphics and interaction update.
 
 ## Choose your starting point
 
@@ -42,9 +42,17 @@ Seeded landscapes combine mountains, valleys, coasts, forests, and rock groups o
 
 Residents walk along streets, cross at marked crossings, and comment on their surroundings, weather, and events. There are **680 authored dialogue lines in each language**, with less frequent speech and more time to read each bubble. Detailed figures, neighborhood pets, and woodland wildlife add activity without simulating every resident individually. Up to 720 pedestrians populate developed street frontages, with off-camera rendering culled. Instanced vehicle graphics support up to 70 ordinary traffic cars, subject to available roads.
 
+The **City life / Stadtleben** button beside the lighting controls opens daily routine counts and sandbox invitations. Visible pedestrians seek actual workplace frontages from 07:00–16:00, parks from 16:00–20:00, and residential frontages at other hours. They dwell at their destination and then stroll; this is a visual street-life system, not a simulation of every household or job. A neighborhood gathering or city festival invites up to 18 reachable nearby pedestrians to an existing park. Invitations last 90/150 walking seconds, followed by a 20-second cooldown. Events, routines and timers pause with the simulation or an open modal. These free actions do not award money or modify the save schema.
+
 Cars follow lanes, traffic lights, junction reservations, and queues. Service vehicles use station driveways to join the road network. Select a vehicle and click its steering-wheel button to drive it; **W/S** accelerate and reverse, **A/D** steer, **Space** applies the handbrake, and **Esc** returns to city building. Traffic can still become congested when roads are overloaded or blocked.
 
 The resident-grab tool supports lifting and throwing people with ragdoll physics. Serious collisions and falls can cause deaths and visible blood; witnessed incidents affect city happiness. Fire, earthquakes, and storms are available through the optional disaster experiment mode. Disaster actions pause the simulation for inspection and can be undone before continuing or making incompatible changes.
+
+Carried residents remain above the local ground. Gentle placement and releasing over the interface preserve the current position; a real flick preserves recent hand momentum. Cancel safely places the resident at their current location. Unsafe roof/water placements still resolve to a nearby safe sidewalk.
+
+The graphics upgrade uses Three.js r186 with WebGL2, detailed residential families, rounded and gabled commercial silhouettes, richer facade materials, and restrained office rooftop detailing while preserving the original facade. Balanced/Ultra profiles combine MSAA and SMAA where the framebuffer supports it; Performance retains direct rendering. Small distant pedestrians use shared simplified silhouettes while hovered and physical actors retain full detail. The 60-FPS rendering cap remains in place. See [graphics and interaction verification](docs/GRAPHICS-INTERACTION-UPGRADE.md) for scope, checks and local inspection pages.
+
+Gatherings and festivals build temporary canopies, tables, stalls or a stage beside a suitable park path; they need actual free space and never cover roads. Attendees remain together until the event ends. A purple-hatted resident wears a red sweater with a black double-headed eagle on its front and back. A single stylized Skanderbeg on horseback rides existing clear pedestrian routes; he is a visual historical tribute, not a saved character or quest. While holding a resident, **WASD/arrows** move the camera and the mouse wheel zooms without turning camera movement into a throw.
 
 Rural commercial lots can develop farmhouse-style architecture, and their rural identity persists in saves. Meadows add grass, flowers, and stones. Suitable lakes support three windsurfers and a rowing boat on a checked water route. A placeable shoreline beach adds another recreation option; Kassel does not start with one automatically. Airports have five layout variants, with aircraft routes checked for clearance from their terminal structures.
 
@@ -62,21 +70,21 @@ See the [Easter Egg asset notes](public/assets/models/easter-egg-office-README.m
 
 ## Controls
 
-| Input | Action |
-| --- | --- |
-| Left click / drag | Apply the selected tool |
-| W A S D / arrow keys | Move the camera |
-| M, then left drag / middle drag / Alt + left drag | Pan |
-| Right drag without a draft / Q and E | Rotate the camera |
-| Mouse wheel | Zoom |
-| 1 / 2 / 3 / 4 / 5 | Road / residential / commercial / industrial / park |
-| B / V / C | Demolish / select / grab resident |
-| R | Rotate a large building |
-| Space with the world focused | Pause / resume |
-| G / N / H / L | Grid / day or night / help / city lights |
-| Cmd/Ctrl + S | Save |
-| Cmd/Ctrl + Z | Undo an available construction or disaster action |
-| Esc | Cancel a draft, close a dialog, or leave a vehicle |
+| Input                                             | Action                                              |
+| ------------------------------------------------- | --------------------------------------------------- |
+| Left click / drag                                 | Apply the selected tool                             |
+| W A S D / arrow keys                              | Move the camera                                     |
+| M, then left drag / middle drag / Alt + left drag | Pan                                                 |
+| Right drag without a draft / Q and E              | Rotate the camera                                   |
+| Mouse wheel                                       | Zoom                                                |
+| 1 / 2 / 3 / 4 / 5                                 | Road / residential / commercial / industrial / park |
+| B / V / C                                         | Demolish / select / grab resident                   |
+| R                                                 | Rotate a large building                             |
+| Space with the world focused                      | Pause / resume                                      |
+| G / N / H / L                                     | Grid / day or night / help / city lights            |
+| Cmd/Ctrl + S                                      | Save                                                |
+| Cmd/Ctrl + Z                                      | Undo an available construction or disaster action   |
+| Esc                                               | Cancel a draft, close a dialog, or leave a vehicle  |
 
 The minimap moves the camera to a location; the globe frames the region and the crosshair returns to the city center. The city sidebar contains budgets, reports, weather and lighting, goals, disasters, the journal, and help. Menus support keyboard navigation, scrolling in smaller windows, and focus restoration. Game shortcuts leave text fields and focused controls alone.
 

@@ -130,7 +130,7 @@ test('rounded resident details preserve instancing and a bounded triangle budget
     );
   assert.equal(
     meshes.length,
-    27,
+    33,
     'Face, clothing and hair details stay in shared instance batches',
   );
   const triangles = meshes.reduce(
@@ -139,7 +139,7 @@ test('rounded resident details preserve instancing and a bounded triangle budget
     0,
   );
   assert.ok(
-    triangles <= 4300,
+    triangles <= 5700,
     `Resident detail exceeded its shared geometry budget: ${triangles} triangles`,
   );
   for (const name of ['head', 'hair', 'leftArm', 'leftShoe', 'leftHand', 'backpack']) {
@@ -158,6 +158,47 @@ test('rounded resident details preserve instancing and a bounded triangle budget
     assert.ok(curved, `${name} should have genuinely rounded geometry rather than flat cube faces`);
   }
   system.dispose();
+});
+
+test('rendered knees and elbows meet and wrists carry their hands as the crowd turns', () => {
+  const system = createCitizens(city());
+  const matrix = new THREE.Matrix4(),
+    upper = new THREE.Matrix4(),
+    lower = new THREE.Matrix4();
+  try {
+    for (let frame = 0; frame < 20; frame++) {
+      system.animate(1 / 60, true);
+      for (const side of ['left', 'right']) {
+        for (const [proximal, distal] of [
+          ['Arm', 'ForeArm'],
+          ['Leg', 'LowerLeg'],
+        ]) {
+          const a = system.group.getObjectByName(
+            `citizen-${side}${proximal}`,
+          ) as THREE.InstancedMesh;
+          const b = system.group.getObjectByName(`citizen-${side}${distal}`) as THREE.InstancedMesh;
+          for (let actor = 0; actor < Math.min(a.count, 12); actor++) {
+            a.getMatrixAt(actor, upper);
+            b.getMatrixAt(actor, lower);
+            const jointA = new THREE.Vector3(0, -0.5, 0).applyMatrix4(upper);
+            const jointB = new THREE.Vector3(0, 0.5, 0).applyMatrix4(lower);
+            assert.ok(jointA.distanceTo(jointB) < 0.003, 'Segments must meet at the joint');
+            if (proximal === 'Arm') {
+              const hand = system.group.getObjectByName(
+                `citizen-${side}Hand`,
+              ) as THREE.InstancedMesh;
+              hand.getMatrixAt(actor, matrix);
+              const wrist = new THREE.Vector3(0, -0.5, 0).applyMatrix4(lower);
+              const handCentre = new THREE.Vector3().setFromMatrixPosition(matrix);
+              assert.ok(wrist.distanceTo(handCentre) < 0.005, 'Hand must follow the bent forearm');
+            }
+          }
+        }
+      }
+    }
+  } finally {
+    system.dispose();
+  }
 });
 
 test('lifted articulated bodies follow the physical hand and remain finite across 720 solver steps', () => {
@@ -316,8 +357,8 @@ test('instanced crowds spawn near city streets, vary their clothing, and obey pa
   assert.ok(before.count >= 24 && before.count <= MAX_CITIZENS);
   assert.equal(before.ragdolls, 0);
   assert.ok(
-    system.group.children.filter((c) => c instanceof THREE.InstancedMesh).length <= 28,
-    'At most twenty-seven crowd meshes plus one particle mesh',
+    system.group.children.filter((c) => c instanceof THREE.InstancedMesh).length <= 37,
+    'At most thirty-three detailed (including two emblems), three distant and one particle batch',
   );
   const shirt = system.group.getObjectByName('citizen-torso') as THREE.InstancedMesh;
   assert.ok(shirt.instanceColor);
@@ -595,7 +636,7 @@ test('residents hidden behind a building cannot be picked through its walls', ()
   system.dispose();
 });
 
-test('the metropolitan crowd stays in 27 shared batches at the bounded resident cap', () => {
+test('the metropolitan crowd stays in 33 shared batches at the bounded resident cap', () => {
   const state = city();
   state.stats.population = 100000;
   const system = createCitizens(state);
@@ -605,11 +646,11 @@ test('the metropolitan crowd stays in 27 shared batches at the bounded resident 
       (object): object is THREE.InstancedMesh =>
         object instanceof THREE.InstancedMesh && object.name.startsWith('citizen-'),
     );
-    assert.equal(meshes.length, 27);
+    assert.equal(meshes.length, 33);
     assert.equal(
       new Set(meshes.map((mesh) => mesh.material)).size,
-      1,
-      'All people share one material',
+      4,
+      'All people share four surface materials regardless of population',
     );
     for (let frame = 0; frame < 90; frame++) system.animate(1 / 60, true);
     for (const mesh of meshes) {
@@ -661,6 +702,107 @@ test('metropolitan pedestrians favor inhabited frontage over equal-length remote
   }
 });
 
+test('citizen construction defers camera/viewport callbacks and LOD responds to viewport changes', () => {
+  const state = city();
+  state.stats.population = 1;
+  const camera = new THREE.OrthographicCamera(-30, 30, 30, -30, 0.1, 100);
+  camera.position.set(0, 30, 0);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+  let ready = false,
+    height = 720;
+  const system = createCitizens(state, undefined, {
+    container: {} as HTMLElement,
+    getCamera: () => {
+      assert.ok(ready, 'Camera is not available during engine construction');
+      return camera;
+    },
+    getViewportHeight: () => {
+      assert.ok(ready);
+      return height;
+    },
+  });
+  try {
+    assert.equal(system.getDebug().detailed, 1, 'Initial/no-camera rendering remains full detail');
+    ready = true;
+    system.animate(1 / 60, false);
+    const before = system.getDebug().positions;
+    assert.equal(system.getDebug().distant, 1);
+    height = 20000;
+    system.animate(1 / 60, false);
+    assert.equal(system.getDebug().detailed, 1);
+    assert.equal(system.getDebug().distant, 0);
+    height = 720;
+    system.animate(1 / 60, false);
+    assert.equal(system.getDebug().distant, 1);
+    assert.deepEqual(system.getDebug().positions, before);
+  } finally {
+    system.dispose();
+  }
+});
+
+test('distant citizens remain hoverable and detailed throughout physical recovery', () => {
+  const state = city();
+  state.stats.population = 1;
+  const camera = new THREE.OrthographicCamera(-30, 30, 30, -30, 0.1, 100);
+  camera.position.set(0, 30, 0);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+  const system = createCitizens(state, undefined, {
+    container: {} as HTMLElement,
+    getCamera: () => camera,
+  });
+  try {
+    system.setEnabled(true);
+    system.animate(1 / 60, false);
+    const p = system.getDebug().positions[0];
+    assert.equal(system.getDebug().distant, 1);
+    const ray = new THREE.Ray(
+      new THREE.Vector3(p.x, p.y + 0.32 * CITIZEN_SCALE, p.z - 1),
+      new THREE.Vector3(0, 0, 1),
+    );
+    assert.equal(system.pointerMove(ray, 0), true);
+    system.animate(1 / 60, false);
+    assert.equal(system.getDebug().hovered, p.id);
+    assert.equal(system.getDebug().detailed, 1);
+    assert.equal(system.getDebug().distant, 0);
+    system.clearHover();
+    system.animate(1 / 60, false);
+    assert.equal(system.getDebug().distant, 1);
+    system.sweepVehicleImpact({
+      previous: { x: p.x - 0.4, y: p.y, z: p.z },
+      current: { x: p.x + 0.4, y: p.y, z: p.z },
+      yaw: Math.PI / 2,
+      width: 0.18,
+      length: 0.34,
+      height: 0.18,
+      velocity: { x: 0.3, y: 0, z: 0 },
+      vehicleId: 41,
+    });
+    let recovering = false;
+    for (let frame = 0; frame < 720; frame++) {
+      system.animate(1 / 60, false);
+      const debug = system.getDebug();
+      assert.equal(debug.count, 1);
+      assert.equal(debug.positions[0].id, p.id);
+      if (debug.ragdolls || debug.recovering) {
+        assert.equal(debug.detailed, 1);
+        assert.equal(debug.distant, 0);
+      }
+      if (debug.recovering) recovering = true;
+      if (recovering && !debug.recovering && !debug.ragdolls) break;
+    }
+    assert.ok(recovering);
+    assert.equal(
+      system.getDebug().distant,
+      1,
+      'A recovered walking citizen returns to overview LOD',
+    );
+  } finally {
+    system.dispose();
+  }
+});
+
 test('camera detail culling preserves pedestrian identities and paused positions', () => {
   const state = city();
   state.stats.population = 100000;
@@ -676,6 +818,8 @@ test('camera detail culling preserves pedestrian identities and paused positions
     const before = system.getDebug().positions;
     system.animate(1 / 60, false);
     const close = system.getDebug();
+    assert.equal(close.detailed, close.rendered, 'Nearby visible people use their detailed model');
+    assert.equal(close.distant, 0);
     assert.ok(
       close.rendered > 0 && close.rendered < MAX_CITIZENS / 2,
       'close view renders only nearby detailed instances',
@@ -692,7 +836,28 @@ test('camera detail culling preserves pedestrian identities and paused positions
     camera.updateProjectionMatrix();
     system.animate(1 / 60, false);
     assert.equal(system.getDebug().rendered, MAX_CITIZENS, 'overview restores all visible people');
+    assert.equal(
+      system.getDebug().distant,
+      MAX_CITIZENS,
+      'Overview retains every visible silhouette',
+    );
+    assert.equal(system.getDebug().detailed, 0, 'Subpixel facial and garment details are omitted');
     assert.deepEqual(system.getDebug().positions, before);
+    const batches = system.group.children.filter(
+      (o): o is THREE.InstancedMesh =>
+        o instanceof THREE.InstancedMesh &&
+        (o.name.startsWith('citizen-') || o.name.startsWith('crowd-lod-')),
+    );
+    assert.equal(batches.filter((mesh) => mesh.count > 0).length, 3);
+    const triangles = batches.reduce(
+      (sum, mesh) =>
+        sum +
+        (mesh.count *
+          (mesh.geometry.index?.count ?? mesh.geometry.getAttribute('position').count)) /
+          3,
+      0,
+    );
+    assert.ok(triangles < 150000, `Overview crowd costs ${triangles} triangles`);
   } finally {
     system.dispose();
   }
@@ -719,6 +884,8 @@ test('camera culling never removes a held resident from rendering or physics', (
     assert.equal(system.pointerDown(ray, new THREE.Vector3(0, -0.7, 0.7), 0), true);
     system.animate(1 / 60, false);
     assert.equal(system.getDebug().rendered, 1);
+    assert.equal(system.getDebug().detailed, 1);
+    assert.equal(system.getDebug().distant, 0);
     assert.equal(system.getDebug().held, person.id);
     assert.equal(system.getDebug().ragdolls, 1);
   } finally {
@@ -756,16 +923,19 @@ test('immutable monthly worker snapshots preserve held residents and active phys
   }
 });
 
-test('holding ignores ground, release restores collision and clears below-ground placement', () => {
+test('held ground support replaces terrain contacts and release restores physical collisions', () => {
   const world = createCitizenPhysicsWorld();
   floor(world);
   const doll = new CitizenRagdoll(world, { x: 0, y: 0.2, z: 0 });
-  doll.hold({ x: 0, y: -0.3, z: 0 });
+  doll.hold({ x: 0, y: -0.3, z: 0 }, () => 0);
   step(world, 0.8);
-  assert.ok(doll.position.y < -0.1, 'held body may cross ground without snagging');
+  assert.ok(
+    doll.position.y >= 0.32 * CITIZEN_SCALE,
+    'downward pressure cannot put the torso underground',
+  );
   assert.ok(
     Object.values(doll.bodies).every((body) => body.collisionFilterMask === 4),
-    'only buildings collide while held',
+    'terrain clearance is enforced without sticky ground contact constraints while held',
   );
   doll.clearGroundPenetration(() => 0);
   for (const body of Object.values(doll.bodies)) {
@@ -778,6 +948,48 @@ test('holding ignores ground, release restores collision and clears below-ground
   assert.ok(doll.position.y >= 0, 'released body rests above ground');
   doll.dispose();
 });
+
+for (const [label, support] of [
+  ['flat', (_x: number, _z: number) => 0],
+  ['elevated', (_x: number, _z: number) => 2.4],
+  ['sloping', (x: number, z: number) => 1.2 + x * 0.65 - z * 0.3],
+] as const)
+  test(`held physics stays above every part's ${label} support footprint after each substep`, () => {
+    const world = createCitizenPhysicsWorld();
+    const doll = new CitizenRagdoll(world, { x: 0, y: support(0, 0), z: 0 });
+    const check = () => {
+      for (const body of Object.values(doll.bodies)) {
+        body.updateAABB();
+        const { lowerBound: low, upperBound: high } = body.aabb;
+        for (const x of [low.x, high.x])
+          for (const z of [low.z, high.z])
+            assert.ok(
+              low.y >= support(x, z) + 0.0019,
+              `${label} body bottom ${low.y} crossed support ${support(x, z)}`,
+            );
+        assert.ok(Number.isFinite(body.velocity.length()));
+      }
+    };
+    try {
+      doll.hold({ x: 0, y: -100, z: 0 }, support);
+      check();
+      for (let frame = 0; frame < 360; frame++) {
+        doll.move({ x: frame / 240, y: -100 - frame, z: frame / 720 });
+        check();
+        world.step(1 / 240);
+        check();
+      }
+      assert.ok(doll.position.x > 1, 'Ground support must still allow horizontal carrying');
+      const before = doll.position.clone();
+      doll.release({ x: 0, y: 0, z: 0 });
+      assert.ok(
+        doll.position.distanceTo(before) < 1e-9,
+        'Release does not change the physical position',
+      );
+    } finally {
+      doll.dispose();
+    }
+  });
 
 test('ordinary three-metre free fall lands and settles without fatal disappearance', () => {
   const world = createCitizenPhysicsWorld();

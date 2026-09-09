@@ -1,5 +1,6 @@
 import { updateOpeningNight, updateOpeningWet } from './facade-openings';
 import { updateCommercialFacadeNight, updateCommercialFacadeWet } from './commercial-facades';
+import { updateRoofSurfaceWet } from './roof-surface';
 import * as THREE from 'three';
 import { setRoadSurfaceWet } from '../infrastructure/road-surface';
 export const palette = {
@@ -62,6 +63,7 @@ export function setModelWet(wet: boolean): void {
   modelWet = wet;
   updateOpeningWet(wet);
   updateCommercialFacadeWet(wet);
+  updateRoofSurfaceWet(wet);
   setRoadSurfaceWet(wet);
   for (const [color, material] of materialCache) updateWetMaterial(material, color);
   if (facilityPavingMaterial) updateWetMaterial(facilityPavingMaterial, palette.asphalt);

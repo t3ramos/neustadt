@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { getModelFootprint } from '../buildings/models';
 import { commercialHighrise, commercialMedium } from '../buildings/architecture';
+import { residentialArchitecture } from '../buildings/residential-architecture';
+import { roofGeometry } from '../buildings/primitives';
 import { getFacilityAccess } from '../../buildings/facility-access';
 import { buildingVariant, zoneLotDimensions, isEasterEggLot } from '../../buildings/lots';
 import type { CityState, Tile } from '../../domain/types';
@@ -53,8 +55,120 @@ function gabledPatches(
   }));
 }
 const commercialRoofCache = new Map<string, FirePatch[]>();
-/** Read authored cap surfaces once per layout, then remove footprints hidden by
- * taller blocks, crowns and antennas. No model construction in the frame loop. */
+const residentialRoofCache = new Map<string, FirePatch[]>();
+
+/** Fit bounded patches to the actual authored roof triangles. This keeps new
+ * pitched/terraced designs and their rooftop furniture in agreement with fire. */
+function residentialRoofs(tile: Tile): FirePatch[] {
+  const [w, d] = zoneLotDimensions(tile);
+  const key = `${buildingVariant(tile)}:${Math.abs(tile.variation) % 4}:${Math.min(tile.level, 3)}:${w}:${d}`;
+  const cached = residentialRoofCache.get(key);
+  if (cached) return cached;
+  const model = new THREE.Group();
+  residentialArchitecture(model, tile, true);
+  const result = visibleRoofPatches(model);
+  if (residentialRoofCache.size >= 256)
+    residentialRoofCache.delete(residentialRoofCache.keys().next().value!);
+  residentialRoofCache.set(key, result);
+  return result;
+}
+
+/** Reused by rounded commercial caps and pitched residential roofs. Geometry
+ * belongs to the building caches; only sampled coordinates are retained here. */
+function visibleRoofPatches(model: THREE.Group): FirePatch[] {
+  model.updateMatrixWorld(true);
+  const triangles: THREE.Triangle[] = [];
+  model.traverse((object) => {
+    if (
+      !(object instanceof THREE.Mesh) ||
+      (object.geometry !== roofGeometry && !object.userData.fireRoof)
+    )
+      return;
+    const geometry = object.geometry,
+      vertices = geometry.getAttribute('position'),
+      index = geometry.index;
+    for (let i = 0; i < (index?.count ?? vertices.count); i += 3) {
+      const point = (offset: number) =>
+        new THREE.Vector3()
+          .fromBufferAttribute(vertices, index ? index.getX(i + offset) : i + offset)
+          .applyMatrix4(object.matrixWorld);
+      const triangle = new THREE.Triangle(point(0), point(1), point(2));
+      if (triangle.getNormal(new THREE.Vector3()).y > 0.3) triangles.push(triangle);
+    }
+  });
+  const result: FirePatch[] = [];
+  const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0), 0, 100);
+  for (const triangle of triangles) {
+    const points = [triangle.a, triangle.b, triangle.c];
+    const normal = triangle.getNormal(new THREE.Vector3());
+    for (const weights of [
+      [1 / 3, 1 / 3, 1 / 3],
+      [0.6, 0.2, 0.2],
+      [0.2, 0.6, 0.2],
+      [0.2, 0.2, 0.6],
+      [0.1, 0.45, 0.45],
+      [0.45, 0.1, 0.45],
+      [0.45, 0.45, 0.1],
+      [0.8, 0.1, 0.1],
+      [0.1, 0.8, 0.1],
+      [0.1, 0.1, 0.8],
+    ]) {
+      const center = new THREE.Vector3();
+      points.forEach((p, i) => center.addScaledVector(p, weights[i]));
+      let radius = Infinity;
+      for (let i = 0; i < 3; i++) {
+        const a = points[i],
+          b = points[(i + 1) % 3],
+          dx = b.x - a.x,
+          dz = b.z - a.z;
+        radius = Math.min(
+          radius,
+          Math.abs(dx * (center.z - a.z) - dz * (center.x - a.x)) / (Math.abs(dx) + Math.abs(dz)),
+        );
+      }
+      let fitted = false;
+      for (let attempt = 0; attempt < 4 && radius > 0.006; attempt++, radius *= 0.6) {
+        const surface = {
+          ...patch(center.x, center.y, center.z, radius * 1.7, radius * 1.7),
+          slopeX: -normal.x / normal.y,
+          slopeZ: -normal.z / normal.y,
+        };
+        let clear = true;
+        samples: for (const u of [-0.45, -0.35, 0, 0.35, 0.45])
+          for (const v of [-0.45, -0.35, 0, 0.35, 0.45]) {
+            const x = surface.x + surface.width * u,
+              z = surface.z + surface.depth * v,
+              y = firePatchHeight(surface, x, z);
+            ray.ray.origin.set(x, y + 20, z);
+            const hit = ray.intersectObject(model, true)[0];
+            if (!hit || Math.abs(hit.point.y - y) > 0.002) {
+              clear = false;
+              break samples;
+            }
+          }
+        if (clear) {
+          result.push(surface);
+          fitted = true;
+          break;
+        }
+      }
+      if (fitted) break;
+    }
+  }
+  result.sort((a, b) => b.width * b.depth - a.width * a.depth || b.y - a.y);
+  // Keep distinct tower/terrace levels represented, even if one curved cap has
+  // many more triangles than its neighbour.
+  if (result.length <= 6) return result;
+  const byHeight = [...result].sort((a, b) => b.y - a.y);
+  const selected = new Set([byHeight[0], byHeight[byHeight.length - 1]]);
+  for (const surface of result) {
+    selected.add(surface);
+    if (selected.size === 6) break;
+  }
+  return [...selected];
+}
+/** Read authored surfaces once per layout, including curved and pitched caps.
+ * No model construction in the frame loop. */
 function commercialRoofs(tile: Tile): FirePatch[] {
   const [w, d] = zoneLotDimensions(tile);
   const key = `${buildingVariant(tile)}:${Math.floor(Math.abs(tile.variation) / 5) % 3}:${tile.level >= 4 ? 4 : tile.level}:${w}:${d}`;
@@ -63,71 +177,12 @@ function commercialRoofs(tile: Tile): FirePatch[] {
   const model = new THREE.Group();
   if (tile.level === 2) commercialMedium(model, tile, true);
   else commercialHighrise(model, tile, true);
-  model.updateMatrixWorld(true);
-  const solids: { box: THREE.Box3; roof: boolean }[] = [];
-  model.traverse((object) => {
-    if (object instanceof THREE.Mesh)
-      solids.push({
-        box: new THREE.Box3().setFromObject(object),
-        roof: !!object.userData.fireRoof,
-      });
-  });
-  const result: FirePatch[] = [];
-  for (const surface of solids.filter((solid) => solid.roof)) {
-    const bounds = surface.box,
-      y = bounds.max.y;
-    let rectangles = [
-      {
-        left: bounds.min.x + 0.006,
-        right: bounds.max.x - 0.006,
-        back: bounds.min.z + 0.006,
-        front: bounds.max.z - 0.006,
-      },
-    ];
-    for (const solid of solids) {
-      if (solid === surface || solid.box.max.y <= y + 0.012) continue;
-      const b = solid.box,
-        cut = {
-          left: b.min.x - 0.008,
-          right: b.max.x + 0.008,
-          back: b.min.z - 0.008,
-          front: b.max.z + 0.008,
-        };
-      rectangles = rectangles.flatMap((r) => {
-        if (
-          cut.right <= r.left ||
-          cut.left >= r.right ||
-          cut.front <= r.back ||
-          cut.back >= r.front
-        )
-          return [r];
-        const left = Math.max(r.left, cut.left),
-          right = Math.min(r.right, cut.right);
-        return [
-          { ...r, right: left },
-          { ...r, left: right },
-          { left, right, back: r.back, front: Math.max(r.back, cut.back) },
-          { left, right, back: Math.min(r.front, cut.front), front: r.front },
-        ].filter((piece) => piece.right - piece.left > 0.055 && piece.front - piece.back > 0.055);
-      });
-    }
-    for (const r of rectangles)
-      result.push(
-        patch(
-          (r.left + r.right) / 2,
-          y,
-          (r.back + r.front) / 2,
-          r.right - r.left,
-          r.front - r.back,
-        ),
-      );
-  }
-  result.sort((a, b) => b.y - a.y || b.width * b.depth - a.width * a.depth);
+  const result = visibleRoofPatches(model);
   // Bounded cache and six useful surfaces match the fixed particles per site.
   if (commercialRoofCache.size >= 128)
     commercialRoofCache.delete(commercialRoofCache.keys().next().value!);
-  commercialRoofCache.set(key, result.slice(0, 6));
-  return commercialRoofCache.get(key)!;
+  commercialRoofCache.set(key, result);
+  return result;
 }
 
 /** Matches zoneArchitecture's broad slabs, excluding roof plant and courtyard trees. */
@@ -135,6 +190,7 @@ function zoneRoofs(tile: Tile): FirePatch[] | null {
   const [w, d] = zoneLotDimensions(tile),
     v = buildingVariant(tile);
   if (tile.level === 0) return [patch(0, 0.04, 0, w * 0.8, d * 0.8)];
+  if (tile.kind === 'residential') return residentialRoofs(tile);
   if (tile.kind === 'commercial' && tile.level >= 2 && !isEasterEggLot(tile))
     return commercialRoofs(tile);
   if (v === 0 && w === 1 && d === 1) return null;

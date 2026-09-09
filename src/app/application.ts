@@ -17,6 +17,8 @@ import { SimulationRuntime } from '../simulation/runtime/controller';
 import { startFrameLoop, type Frame } from './frame-loop';
 import { showWelcomePreview, dismissWelcomePreview } from '../ui/welcome-preview';
 import { renderCameraView } from '../ui/views/camera';
+import { renderCitizenLifeView } from '../ui/views/citizen-life';
+import type { CitizenEventKind } from '../domain/citizen-life';
 import { renderBudgetView } from '../ui/views/budget';
 import { renderReportsView } from '../ui/views/reports';
 import { renderNewsView } from '../ui/views/news';
@@ -800,7 +802,70 @@ function setOverlay(v: Overlay) {
 }
 
 function renderModal() {
-  if (dialogs.page === 'progression') {
+  if (dialogs.page === 'citizen-life') {
+    dialogs.render(
+      tr('Menschen machen eine Stadt.', 'People make a city.'),
+      tr('STADTLEBEN', 'CITY LIFE'),
+      renderCitizenLifeView(scene.getCitizenLife(), state.speed === 0),
+    );
+    document.querySelectorAll<HTMLButtonElement>('[data-citizen-event]').forEach((button) => {
+      button.onclick = () => {
+        if (state.speed === 0) return;
+        const result = scene.triggerCitizenEvent(button.dataset.citizenEvent as CitizenEventKind);
+        if (result.ok) {
+          dialogs.close();
+          scene.focusCitizenEvent();
+          toast(
+            tr(
+              `${result.event.invited} Bewohner sind eingeladen. Beobachte ihre Ankunft am Pavillon oder an der Bühne.`,
+              `${result.event.invited} residents are invited. Watch them arrive at the canopy or stage.`,
+            ),
+            'good',
+          );
+        } else {
+          const messages = {
+            'no-place': tr(
+              'Hier fehlt ein erreichbarer Park mit freier Fläche für Pavillon oder Bühne. Wähle einen anderen Park im belebten Viertel.',
+              'A reachable park with free space for a canopy or stage is needed. Select another park in a populated neighborhood.',
+            ),
+            'no-people': tr(
+              'Hier sind gerade keine Bewohner über Wege erreichbar. Probiere einen belebteren Park.',
+              'No residents can reach this spot right now. Try a busier park.',
+            ),
+            cooldown: tr(
+              'Die Bewohner brauchen noch eine kurze Pause.',
+              'Residents need a short break first.',
+            ),
+            active: tr('Es läuft bereits eine Veranstaltung.', 'An event is already running.'),
+          };
+          toast(messages[result.reason], 'warning');
+        }
+      };
+    });
+    document
+      .querySelector<HTMLElement>('[data-citizen-event-focus]')
+      ?.addEventListener('click', () => {
+        dialogs.close();
+        scene.focusCitizenEvent();
+      });
+    document
+      .querySelector<HTMLElement>('[data-citizen-event-stop]')
+      ?.addEventListener('click', () => {
+        scene.stopCitizenEvent();
+        renderModal();
+      });
+    document.querySelector<HTMLElement>('[data-citizen-grab]')?.addEventListener('click', () => {
+      dialogs.close();
+      selectTool('citizen');
+    });
+    document.querySelector<HTMLElement>('[data-citizen-resume]')?.addEventListener('click', () => {
+      state.speed = 1;
+      syncScene();
+      renderStats();
+      scheduleSave();
+      renderModal();
+    });
+  } else if (dialogs.page === 'progression') {
     dialogs.render(
       tr('Deine Stadt hat große Pläne.', 'Your city has big plans.'),
       tr('AUFTRÄGE · AUSBAUSTUFEN · STADTZIEL', 'QUESTS · CITY LEVELS · CITY GOAL'),
@@ -1106,6 +1171,7 @@ function wireEvents(includeGlobal = true) {
     focusWorldAfterPointer(event);
   };
   $('#graphics-btn').onclick = () => dialogs.open('graphics');
+  $('#citizen-life-btn').onclick = () => dialogs.open('citizen-life');
   $('#save-btn').onclick = () => save();
   $('#undo-btn').onclick = undo;
   $('#menu-btn').onclick = () => dialogs.open('menu');

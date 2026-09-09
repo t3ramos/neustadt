@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { createFrameLimiter } from '../rendering/frame-limit';
 import { createEasterEggBuilding } from '../rendering/buildings/easter-egg';
 import { tr } from '../i18n/index';
 import { icon, refreshIcons } from './dom';
@@ -28,17 +30,38 @@ export function showEasterEggPreview(onReturn: () => void): boolean {
   } catch {
     return false;
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.setClearColor(0xe8ecdf);
   surface.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
+  const studio = new RoomEnvironment();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environment = pmrem.fromScene(studio, 0.04);
+  scene.environment = environment.texture;
+  scene.environmentIntensity = 0.4;
+  studio.dispose();
+  pmrem.dispose();
   scene.add(building);
-  scene.add(new THREE.HemisphereLight(0xf8fbff, 0x80936d, 2));
+  scene.add(new THREE.HemisphereLight(0xf8fbff, 0x80936d, 1.1));
   const sunlight = new THREE.DirectionalLight(0xfff1d8, 3);
   sunlight.position.set(-4, 8, 7);
+  sunlight.castShadow = true;
+  sunlight.shadow.mapSize.set(2048, 2048);
+  Object.assign(sunlight.shadow.camera, {
+    left: -4,
+    right: 4,
+    top: 4,
+    bottom: -4,
+    near: 0.1,
+    far: 25,
+  });
+  sunlight.shadow.normalBias = 0.002;
+  sunlight.shadow.bias = -0.0001;
   scene.add(sunlight);
   const bounds = new THREE.Box3().setFromObject(building);
   const center = bounds.getCenter(new THREE.Vector3());
@@ -48,6 +71,7 @@ export function showEasterEggPreview(onReturn: () => void): boolean {
   const floorMaterial = new THREE.MeshStandardMaterial({ color: 0xdde3d2, roughness: 1 });
   const floor = new THREE.Mesh(floorGeometry, floorMaterial);
   floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
   floor.position.set(center.x, bounds.min.y - 0.025, center.z);
   scene.add(floor);
   const camera = new THREE.PerspectiveCamera(34, 1, 0.02, span * 40);
@@ -78,11 +102,13 @@ export function showEasterEggPreview(onReturn: () => void): boolean {
   resize();
   let handle = 0;
   let disposed = false;
-  function frame() {
+  const shouldRender = createFrameLimiter(60);
+  function frame(now: number) {
     if (disposed) return;
+    handle = requestAnimationFrame(frame);
+    if (!shouldRender(now)) return;
     controls.update();
     renderer.render(scene, camera);
-    handle = requestAnimationFrame(frame);
   }
   function close() {
     if (disposed) return;
@@ -92,6 +118,8 @@ export function showEasterEggPreview(onReturn: () => void): boolean {
     controls.dispose();
     floorGeometry.dispose();
     floorMaterial.dispose();
+    environment.dispose();
+    sunlight.shadow.map?.dispose();
     // GLB geometry/materials are shared with the live city's batches.
     renderer.dispose();
     renderer.forceContextLoss();
@@ -115,6 +143,6 @@ export function showEasterEggPreview(onReturn: () => void): boolean {
     }
   });
   closeButton.focus();
-  frame();
+  handle = requestAnimationFrame(frame);
   return true;
 }

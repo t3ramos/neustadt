@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { palette, modelMaterial } from './materials';
+import { roofSurfaceMaterial } from './roof-surface';
 export const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 export const coneGeometry = new THREE.ConeGeometry(0.5, 1, 7);
 export const cylinderGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
@@ -42,6 +43,17 @@ roofGeometry.setAttribute(
   ),
 );
 roofGeometry.computeVertexNormals();
+const roofPositions = roofGeometry.getAttribute('position');
+const roofNormals = roofGeometry.getAttribute('normal');
+const roofUv = new Float32Array(roofPositions.count * 2);
+for (let vertex = 0; vertex < roofPositions.count; vertex++) {
+  roofUv[vertex * 2] =
+    roofNormals.getY(vertex) > 0.1
+      ? roofPositions.getZ(vertex) + 0.5
+      : roofPositions.getX(vertex) + 0.5;
+  roofUv[vertex * 2 + 1] = roofPositions.getY(vertex);
+}
+roofGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(roofUv, 2));
 export function mesh(
   group: THREE.Group,
   geometry: THREE.BufferGeometry,
@@ -99,7 +111,8 @@ export function roof(
   d: number,
   angle = 0,
 ): void {
-  mesh(g, roofGeometry, c, x, y, z, w, h, d, angle);
+  const result = mesh(g, roofGeometry, c, x, y, z, w, h, d, angle);
+  result.material = roofSurfaceMaterial(c);
 }
 export function slab(g: THREE.Group, color = palette.concrete, width = 0.9, depth = 0.9): void {
   box(g, color, 0, 0.014, 0, width, 0.028, depth);

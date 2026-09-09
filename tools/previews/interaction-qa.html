@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Neustadt · Interaktionsprüfung</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #173c37;
+        color: white;
+        font: 14px system-ui;
+      }
+      #world {
+        position: absolute;
+        inset: 0;
+      }
+      header {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        background: #16382be8;
+        padding: 12px;
+        border-radius: 14px;
+      }
+      button {
+        padding: 10px;
+        border: 0;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      #outside {
+        position: absolute;
+        right: 0;
+        top: 35%;
+        width: 140px;
+        height: 180px;
+        background: #16382beb;
+        padding: 20px;
+      }
+      #status {
+        position: absolute;
+        bottom: 0;
+        background: #16382be8;
+        width: 100%;
+        padding: 16px;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="world" tabindex="0"></div>
+    <header>
+      <b>Interaktionsprüfung · isolierte Teststadt</b><button id="inspect">Auswahl</button
+      ><button id="grab">Greifen</button><button id="play">Pause / Weiter</button
+      ><button id="gather">Treffen</button><button id="festival">Fest</button
+      ><button id="rotate">Drehen</button>
+    </header>
+    <aside id="outside">Hier loslassen: außerhalb der Spielfläche</aside>
+    <div id="status"></div>
+    <script type="module" src="./interaction-qa.ts"></script>
+  </body>
+</html>

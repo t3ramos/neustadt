@@ -4,14 +4,16 @@ import { createWorldChunks } from './scene/world-chunks';
 import * as THREE from 'three';
 import { createFrameLimiter } from './frame-limit';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { batchGroup, disposeGroup } from './scene/geometry';
+import { batchGroup, disposeGroup, getBatchTriangleOwner } from './scene/geometry';
 import { createBuildingChunks } from './scene/building-chunks';
 import { createSceneMetrics } from './scene/metrics';
 import { createGpuTiming } from './scene/gpu-timing';
 import { createLiveInstances } from './scene/live-instances';
+import { createGroundOutline, selectionBounds } from './scene/ground-outline';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import {
   createTileModel,
   setModelNightBlend,
@@ -24,6 +26,7 @@ import { previewBuild, getFootprint, isBuildingAnchor } from '../simulation/city
 import { createWeatherEffects } from './effects/weather';
 import { createFireEffects } from './effects/fire';
 import { createCitizens } from '../citizens/system';
+import { createMountedHero } from '../citizens/mounted-hero';
 import {
   createDrivingController,
   getVehicleDimensions,
@@ -252,6 +255,9 @@ export function createCityScene(
   const composer = new EffectComposer(renderer, postTarget);
   const renderPass = new RenderPass(scene, camera);
   const outputPass = new OutputPass();
+  // MSAA covers geometry edges; SMAA also resolves thin facade/roof patterns.
+  // r186's SMAA operates in linear color and must precede OutputPass.
+  const antialiasPass = renderer.extensions.has('EXT_color_buffer_float') ? new SMAAPass() : null;
   const renderStages = {
     primary: { calls: 0, triangles: 0 },
     occlusion: { calls: 0, triangles: 0 },
@@ -270,12 +276,12 @@ export function createCityScene(
     }
   };
   composer.addPass(renderPass);
-  // Keep only color/antialiasing output: screen-space occlusion caused dark
-  // silhouette bands when the near map edge filled the view.
+  // No screen-space occlusion: it previously produced dark silhouette bands.
+  if (antialiasPass) composer.addPass(antialiasPass);
   composer.addPass(outputPass);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.1;
+  controls.dampingFactor = 0.18;
   controls.minZoom = 0.2;
   controls.maxZoom = 7;
   controls.minPolarAngle = Math.PI * 0.16;
@@ -339,6 +345,8 @@ export function createCityScene(
     getCamera: () => viewCamera(),
   });
   scene.add(citizens.group);
+  const mountedHero = createMountedHero(state);
+  scene.add(mountedHero.group);
   const animals = createAnimalSystem(state);
   const streetlights = createStreetlights(state);
   scene.add(animals.group, streetlights.group);
@@ -473,16 +481,15 @@ export function createCityScene(
   );
   ghostVolume.visible = false;
   scene.add(ghostVolume);
-  const cursorMaterial = new THREE.LineBasicMaterial({
+  const cursorMaterial = new THREE.MeshBasicMaterial({
     color: 0xf6e4aa,
     transparent: true,
     opacity: 0.98,
-    depthTest: false,
+    depthTest: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
   });
-  const cursor = new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(0.98, 0.045, 0.98)),
-    cursorMaterial,
-  );
+  const cursor = new THREE.Mesh(new THREE.BufferGeometry(), cursorMaterial);
   cursor.visible = false;
   cursor.renderOrder = 10;
   scene.add(cursor);
@@ -490,14 +497,32 @@ export function createCityScene(
     color: 0xffd577,
     transparent: true,
     opacity: 0.65,
-    depthTest: false,
+    depthTest: true,
+    depthWrite: false,
     side: THREE.DoubleSide,
   });
-  const selection = new THREE.Mesh(new THREE.RingGeometry(0.43, 0.49, 4), selectionMaterial);
-  selection.rotation.set(-Math.PI / 2, 0, Math.PI / 4);
+  const selection = new THREE.Mesh(new THREE.BufferGeometry(), selectionMaterial);
+  selection.name = 'selected-ground-outline';
+  cursor.name = 'hover-ground-outline';
   selection.visible = false;
   selection.renderOrder = 9;
   scene.add(selection);
+  let selectionKey = '';
+  function refreshSelection(): void {
+    const bounds = selected && selectionBounds(state, selected);
+    if (!bounds) {
+      selection.visible = false;
+      selectionKey = '';
+      return;
+    }
+    const key = `${state.revision}:${bounds.x}:${bounds.z}:${bounds.width}:${bounds.depth}`;
+    if (key !== selectionKey) {
+      selection.geometry.dispose();
+      selection.geometry = createGroundOutline(state, bounds);
+      selectionKey = key;
+    }
+    selection.visible = true;
+  }
   for (const helper of [overlayMesh, ghost, ghostEdges, ghostVolume, cursor, selection]) {
     helper.userData.raytracingExclude = true;
     helper.userData.ambientOcclusionExclude = true;
@@ -1271,6 +1296,10 @@ export function createCityScene(
   const pointer = new THREE.Vector2();
   const intersection = new THREE.Vector3();
   let pointerOcclusionDistance = Infinity;
+  let lastPointerEvent: PointerEvent | null = null;
+  const pickCameraMatrix = new THREE.Matrix4(),
+    pickProjectionMatrix = new THREE.Matrix4();
+  let lastCameraPick = 0;
   function pointFromEvent(event: PointerEvent): Point | null {
     const rect = renderer.domElement.getBoundingClientRect();
     pointerScreen = { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -1284,6 +1313,11 @@ export function createCityScene(
     const hit = raycaster.intersectObjects(targets, true)[0];
     pointerOcclusionDistance = hit?.distance ?? Infinity;
     if (!hit) return null;
+    const owner = getBatchTriangleOwner(hit.object, hit.faceIndex);
+    if (owner !== null && state.tiles[owner]) {
+      const tile = state.tiles[owner];
+      return { x: tile.x, z: tile.z };
+    }
     intersection.copy(hit.point);
     const x = Math.floor(intersection.x + half),
       z = Math.floor(intersection.z + half);
@@ -1462,20 +1496,24 @@ export function createCityScene(
         : [SINGLE_TILE_TOOLS.has(tool) ? 1 : brush, SINGLE_TILE_TOOLS.has(tool) ? 1 : brush];
       const offset = fixed ? 0 : Math.floor((w - 1) / 2);
       const ground = Math.max(-0.06, tileAt(anchor.x, anchor.z)?.elevation ?? 0);
-      cursor.scale.set(w, 1, d);
-      cursor.position.set(
-        anchor.x - half + w / 2 - offset,
-        ground + 0.13,
-        anchor.z - half + d / 2 - offset,
-      );
+      cursor.geometry.dispose();
+      cursor.geometry = createGroundOutline(state, {
+        x: anchor.x - offset,
+        z: anchor.z - offset,
+        width: w,
+        depth: d,
+      });
       cursorMaterial.color.set(
         result?.invalid.length || (result && result.cost > state.money) ? 0xff9c91 : 0xb3fff0,
       );
       if (fixed && result) {
         ghostVolume.visible = true;
         ghostVolume.scale.set(w - 0.08, 0.35, d - 0.08);
-        ghostVolume.position.copy(cursor.position);
-        ghostVolume.position.y += 0.12;
+        ghostVolume.position.set(
+          anchor.x - half + w / 2 - offset,
+          ground + 0.25,
+          anchor.z - half + d / 2 - offset,
+        );
         (ghostVolume.material as THREE.MeshBasicMaterial).color.copy(cursorMaterial.color);
       }
       lastPreview = result
@@ -1595,6 +1633,10 @@ export function createCityScene(
           event.timeStamp,
         )
       ) {
+        renderer.domElement.focus({ preventScroll: true });
+        lastPointerEvent = event;
+        pickCameraMatrix.copy(camera.matrixWorld);
+        pickProjectionMatrix.copy(camera.projectionMatrix);
         interaction.begin(event.pointerId, event.button);
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -1607,21 +1649,7 @@ export function createCityScene(
     if (!point) return;
     if (tool === 'inspect') {
       selected = point;
-      const anchor = tileAt(point.x, point.z)!;
-      const cells = getFootprint(state, anchor);
-      const selectedTile = anchor.anchor >= 0 ? state.tiles[anchor.anchor] : anchor;
-      const bounds = cells.length ? cells : [point];
-      selection.scale.set(
-        Math.max(...bounds.map((p) => p.x)) - Math.min(...bounds.map((p) => p.x)) + 1,
-        Math.max(...bounds.map((p) => p.z)) - Math.min(...bounds.map((p) => p.z)) + 1,
-        1,
-      );
-      selection.position.set(
-        (Math.min(...bounds.map((p) => p.x)) + Math.max(...bounds.map((p) => p.x)) + 1) / 2 - half,
-        Math.max(-0.05, selectedTile.elevation) + 0.13,
-        (Math.min(...bounds.map((p) => p.z)) + Math.max(...bounds.map((p) => p.z)) + 1) / 2 - half,
-      );
-      selection.visible = true;
+      refreshSelection();
       callbacks.onSelect(point);
       return;
     }
@@ -1644,6 +1672,7 @@ export function createCityScene(
   }
 
   function onPointerMove(event: PointerEvent) {
+    lastPointerEvent = event;
     if (suppressCanceledPointer(event)) return;
     if (driving.active) return;
     if (modalOpen()) {
@@ -1651,6 +1680,12 @@ export function createCityScene(
       return;
     }
     if (interaction.active) {
+      // Some browsers emit a zero-button move before pointerup. For a captured
+      // hand this is a release, not construction-style cancellation to origin.
+      if (citizens.holding && interaction.owns(event.pointerId) && event.buttons === 0) {
+        finishStroke(event, 0);
+        return;
+      }
       const movement = interaction.movement(event.pointerId, event.buttons);
       if (movement === 'ignore') return;
       if (movement === 'cancel') {
@@ -1661,7 +1696,7 @@ export function createCityScene(
       event.preventDefault();
       event.stopImmediatePropagation();
     }
-    if (!overCanvas(event)) {
+    if (!overCanvas(event) && !citizens.holding) {
       currentHover = null;
       callbacks.onHover(null);
       refreshGhost();
@@ -1689,20 +1724,23 @@ export function createCityScene(
     refreshGhost();
   }
 
-  function finishStroke(event: PointerEvent) {
+  function finishStroke(event: PointerEvent, releasedButton = event.button) {
     if (suppressCanceledPointer(event)) return;
     if (!interaction.owns(event.pointerId)) return;
-    if (event.button !== 0) {
-      if (event.button === 2 || (event.buttons & 2) !== 0) cancelFromRightButton(event);
+    if (releasedButton !== 0) {
+      if (releasedButton === 2 || (event.buttons & 2) !== 0) cancelFromRightButton(event);
       return;
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    const allowed = !modalOpen() && overCanvas(event) && (event.buttons & 2) === 0;
+    // Pointer capture belongs to the held person even over the HUD or outside
+    // the canvas. Construction still requires an actual canvas release.
+    const allowed =
+      !modalOpen() && (citizens.holding || overCanvas(event)) && (event.buttons & 2) === 0;
     const point = allowed ? pointFromEvent(event) : null;
     const outcome = interaction.release(
       event.pointerId,
-      event.button,
+      releasedButton,
       allowed && (citizens.holding || !!point),
     );
     if (outcome !== 'commit') {
@@ -1751,6 +1789,7 @@ export function createCityScene(
   function onPointerLeave() {
     driving.leaveHover();
     if (citizens.holding) return;
+    lastPointerEvent = null;
     citizens.clearHover();
     if (dragging) return;
     currentHover = null;
@@ -1828,12 +1867,39 @@ export function createCityScene(
     event.preventDefault();
     cancelFromRightButton(event);
   }
+  function onHeldWheel(event: WheelEvent) {
+    if (!citizens.holding || modalOpen()) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const pixels =
+      event.deltaY *
+      (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? container.clientHeight : 1);
+    camera.zoom = THREE.MathUtils.clamp(
+      camera.zoom * Math.exp(-pixels * 0.001),
+      controls.minZoom,
+      controls.maxZoom,
+    );
+    camera.updateProjectionMatrix();
+    rebaseHeldCamera();
+  }
+  function rebaseHeldCamera() {
+    if (!citizens.holding || !lastPointerEvent) return;
+    pointFromEvent(lastPointerEvent);
+    citizens.rebaseHeldCamera(
+      raycaster.ray,
+      camera.getWorldDirection(new THREE.Vector3()),
+      performance.now(),
+    );
+    pickCameraMatrix.copy(camera.matrixWorld);
+    pickProjectionMatrix.copy(camera.projectionMatrix);
+  }
   renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
   renderer.domElement.addEventListener('pointermove', onPointerMove, true);
   renderer.domElement.addEventListener('mousedown', onMouseDown, true);
   renderer.domElement.addEventListener('lostpointercapture', onLostPointerCapture);
   renderer.domElement.addEventListener('pointerleave', onPointerLeave);
   renderer.domElement.addEventListener('contextmenu', onContextMenu, true);
+  renderer.domElement.addEventListener('wheel', onHeldWheel, { capture: true, passive: false });
   window.addEventListener('pointerup', finishStroke, true);
   window.addEventListener('pointercancel', onPointerCancel, true);
   window.addEventListener('keydown', onKeyDown);
@@ -1851,11 +1917,12 @@ export function createCityScene(
     composer.setSize(width, height);
     const viewHeight = 34;
     const viewWidth = (viewHeight * width) / height;
-    const shift = width > 900 ? 0.085 : 0;
-    camera.left = -viewWidth * (0.5 + shift);
-    camera.right = viewWidth * (0.5 - shift);
-    camera.top = viewHeight * 0.47;
-    camera.bottom = -viewHeight * 0.53;
+    // Keep the orbit target centred at every zoom and after viewport changes.
+    // An asymmetric orthographic frustum shifts its centre independently of zoom.
+    camera.left = -viewWidth / 2;
+    camera.right = viewWidth / 2;
+    camera.top = viewHeight / 2;
+    camera.bottom = -viewHeight / 2;
     controls.minZoom = overviewZoom();
     camera.zoom = Math.max(camera.zoom, controls.minZoom);
     camera.updateProjectionMatrix();
@@ -2005,9 +2072,11 @@ export function createCityScene(
     });
     renderer.shadowMap.needsUpdate = true;
     applyStableShadowFiltering(scene);
-    if (driving.active) renderer.render(scene, viewCamera());
-    else if (graphicsQuality === 'performance') renderer.render(scene, camera);
-    else composer.render();
+    if (graphicsQuality === 'performance') renderer.render(scene, viewCamera());
+    else {
+      renderPass.camera = viewCamera();
+      composer.render();
+    }
   }
 
   let chunksInitial = true;
@@ -2015,6 +2084,7 @@ export function createCityScene(
     const updateStarted = performance.now();
     state = next;
     metrics.measure('citizens', () => citizens.update(state));
+    metrics.measure('mountedHero', () => mountedHero.update(state));
     metrics.measure('animals', () => animals.update(state));
     metrics.measure('streetlights', () => streetlights.update(state));
     metrics.measure('terrain', () => makeTerrain());
@@ -2048,7 +2118,7 @@ export function createCityScene(
     if (weather !== state.settings.weather) setWeather(state.settings.weather);
     updateOverlay();
     refreshGhost();
-    if (selected && !tileAt(selected.x, selected.z)) selection.visible = false;
+    refreshSelection();
     chunksInitial = false;
     metrics.record('update', performance.now() - updateStarted);
   }
@@ -2112,7 +2182,9 @@ export function createCityScene(
           driving.keyUp(code);
       metrics.measure('animateDriving', () => driving.update(dt));
 
-      metrics.measure('animateCitizens', () => citizens.animate(dt, state.speed > 0));
+      metrics.measure('animateCitizens', () =>
+        citizens.animate(dt, state.speed > 0 && !modalOpen(), timeOfDay),
+      );
       const driven = driving.selectedCar,
         driveSpeed = Math.abs(driving.getStatus().speed) / 36;
       animals.setVehicle(
@@ -2137,8 +2209,34 @@ export function createCityScene(
           });
       }
     }
+    mountedHero.animate(dt, state.speed > 0 && !modalOpen());
     moveCamera(dt);
     if (!driving.active) controls.update();
+    if (
+      citizens.holding &&
+      (pickCameraMatrix.elements.some(
+        (v, i) => Math.abs(v - camera.matrixWorld.elements[i]) > 1e-7,
+      ) ||
+        pickProjectionMatrix.elements.some(
+          (v, i) => Math.abs(v - camera.projectionMatrix.elements[i]) > 1e-7,
+        ))
+    )
+      rebaseHeldCamera();
+    if (
+      lastPointerEvent &&
+      !interaction.active &&
+      !citizens.holding &&
+      !modalOpen() &&
+      !driving.active &&
+      timestamp - lastCameraPick >= 50 &&
+      (!pickCameraMatrix.equals(camera.matrixWorld) ||
+        !pickProjectionMatrix.equals(camera.projectionMatrix))
+    ) {
+      pickCameraMatrix.copy(camera.matrixWorld);
+      pickProjectionMatrix.copy(camera.projectionMatrix);
+      lastCameraPick = timestamp;
+      onPointerMove(lastPointerEvent);
+    }
     updateSunShadow();
     gpuTiming.begin();
     try {
@@ -2193,8 +2291,12 @@ export function createCityScene(
         buildingQueue: buildingChunks.diagnostics(),
         liveInstances: liveInstances.diagnostics(),
         renderStages,
+        mountedHero: mountedHero.getDebug(),
         gpu: gpuTiming.snapshot(),
         render: {
+          engine: `Three.js r${THREE.REVISION}`,
+          antialiasing:
+            graphicsQuality === 'performance' ? 'MSAA' : antialiasPass ? 'MSAA + SMAA' : 'MSAA',
           calls: renderer.info.render.calls,
           triangles: renderer.info.render.triangles,
           geometries: renderer.info.memory.geometries,
@@ -2368,6 +2470,29 @@ export function createCityScene(
     getTimeOfDay: () => timeOfDay,
     enterDrive,
     exitDrive,
+    getCitizenLife: () => citizens.getLife(),
+    triggerCitizenEvent(kind) {
+      const near = selected
+        ? { x: selected.x - half + 0.5, z: selected.z - half + 0.5 }
+        : controls.target;
+      return citizens.triggerEvent(kind, near);
+    },
+    focusCitizenEvent() {
+      const event = citizens.getLife().event;
+      if (!event) return;
+      if (driving.active) exitDrive();
+      const target = new THREE.Vector3(
+        event.x,
+        sampleGroundHeight(state, event.x, event.z) + 0.12,
+        event.z,
+      );
+      camera.position.add(target.clone().sub(controls.target));
+      controls.target.copy(target);
+      camera.zoom = Math.min(controls.maxZoom, 5);
+      camera.updateProjectionMatrix();
+      controls.update();
+    },
+    stopCitizenEvent: () => citizens.stopEvent(),
     getDrivingStatus: () => driving.getStatus(),
     setWeather,
     setGraphicsQuality,
@@ -2406,9 +2531,7 @@ export function createCityScene(
       camera.updateProjectionMatrix();
       controls.update();
       selected = { x, z };
-      selection.scale.set(1, 1, 1);
-      selection.position.set(target.x, target.y + 0.13, target.z);
-      selection.visible = true;
+      refreshSelection();
     },
     focusBuilding(x, z) {
       if (driving.active) exitDrive();
@@ -2455,9 +2578,7 @@ export function createCityScene(
       camera.updateProjectionMatrix();
       controls.update();
       selected = { x: tile.x, z: tile.z };
-      selection.scale.set(width, depth, 1);
-      selection.position.set(target.x, ground + 0.13, target.z);
-      selection.visible = true;
+      refreshSelection();
       callbacks.onSelect(selected);
     },
     screenshot() {
@@ -2465,6 +2586,7 @@ export function createCityScene(
       return renderer.domElement.toDataURL('image/png');
     },
     dispose() {
+      renderer.domElement.removeEventListener('wheel', onHeldWheel, true);
       cancelInteraction();
       disposed = true;
       liveInstances.dispose();
@@ -2473,6 +2595,7 @@ export function createCityScene(
       observer.disconnect();
       controls.dispose();
       outputPass.dispose();
+      antialiasPass?.dispose();
       composer.dispose();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown, true);
       renderer.domElement.removeEventListener('pointermove', onPointerMove, true);
@@ -2488,6 +2611,7 @@ export function createCityScene(
       document.removeEventListener('visibilitychange', onBlur);
       recreation.dispose();
       citizens.dispose();
+      mountedHero.dispose();
       animals.dispose();
       streetlights.dispose();
       fireEffects.dispose();

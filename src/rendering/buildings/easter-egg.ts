@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { Tile } from '../../domain/types';
 import { isEasterEggLot } from '../../buildings/lots';
+import { createLandmarkOfficeDetails } from './landmark-office';
 export { EASTER_EGG_BUILDING_VARIATION } from '../../buildings/lots';
 
 export const EASTER_EGG_BUILDING_ASSET_URL = `${import.meta.env?.BASE_URL ?? '/'}assets/models/easter-egg-office.glb`;
@@ -21,6 +22,7 @@ export function preloadEasterEggBuilding(): Promise<void> {
       .then((gltf) => {
         template = gltf.scene;
         template.name = 'Easter Egg office source';
+        template.add(createLandmarkOfficeDetails());
         template.traverse((object) => {
           if (!(object instanceof THREE.Mesh)) return;
           object.castShadow = true;

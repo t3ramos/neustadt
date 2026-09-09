@@ -8,7 +8,7 @@
 
 Neustadt ist eine eigenständige Open-Source-Städtebausimulation von [t3ramos](https://github.com/t3ramos). Baue Straßen und Versorgungsnetze, gestalte das Gelände, finanziere öffentliche Dienste und entwickle eine Kleinstadt zur Metropole. Anschließend kannst du deine Stadt am Steuer eines ihrer Fahrzeuge aus Straßenhöhe erkunden. Das gesamte Spiel ist auf Deutsch und Englisch verfügbar.
 
-Diese README beschreibt den Entwicklungsstand von v3.0.0. Veröffentlichung und abschließende Release-Prüfung stehen noch aus; die [Release-Notizen](docs/RELEASE-v3.0.0.md) halten den Status fest.
+Diese README beschreibt v3.1.0. Die [Release-Notizen](docs/RELEASE-v3.1.0.md) erklären die Grafik- und Interaktionsverbesserungen.
 
 ## Wähle deinen Einstieg
 
@@ -42,9 +42,17 @@ Seed-basierte Landschaften verbinden Berge, Täler, Küsten, Wälder und Felsgru
 
 Bewohner laufen entlang der Straßen, nutzen markierte Querungen und kommentieren Umgebung, Wetter und Ereignisse. Es gibt **680 eigenständig formulierte Dialogzeilen je Sprache**, mit selteneren Sprechblasen und mehr Zeit zum Lesen. Detaillierte Figuren, Haustiere in Wohnvierteln und Wildtiere im Wald beleben die Stadt, ohne jeden einzelnen Einwohner zu simulieren. Bis zu 720 Fußgänger verteilen sich entlang bebauter Straßenfronten; außerhalb des Kamerabereichs wird ihre Darstellung ausgespart. Instanzierte Fahrzeugmodelle unterstützen bis zu 70 gewöhnliche Verkehrsautos, abhängig vom verfügbaren Straßennetz.
 
+**Stadtleben** neben den Lichtschaltern zeigt die sichtbaren Tagesabläufe und bietet Nachbarschaftstreff oder Stadtfest an. Bewohner suchen tagsüber Arbeitsstätten, am frühen Abend Parks und sonst Wohngebiete auf. Bis zu 18 erreichbare Personen kommen an einem geeigneten Park zusammen. Pavillons, Tische, Stände oder eine kleine Bühne benötigen echten freien Platz neben den Wegen. Die Treffen dauern 90 beziehungsweise 150 laufende Sekunden; Pause und offene Dialoge halten die Zeit an. Es handelt sich um visuelle Tagesabläufe, nicht um eine vollständige Simulation jedes Haushalts.
+
+Die Grafik verwendet Three.js r186 mit WebGL2: neue Wohnhäuser, runde und giebelbekrönte Gewerbegebäude, abwechslungsreichere Fassaden, detailliertere Bewohner und die ursprüngliche Firmenfassade mit dezent ergänzter Dachterrasse. Ausgeglichen/Ultra glätten Kanten zusätzlich mit SMAA, sofern das Gerät es unterstützt. Kleine entfernte Figuren nutzen vereinfachte Modelle. Die Obergrenze bleibt bei 60 Bildern pro Sekunde.
+
+Ein Bewohner mit violettem Hut trägt einen kräftig roten Pullover mit schwarzem Doppeladler auf Vorder- und Rückseite. Ein stilisierter Skanderbeg zu Pferd reitet auf vorhandenen freien Wegen durch die Stadt – eine historische Hommage ohne gespeicherte Figur oder zusätzliche Quest.
+
 Autos folgen Fahrspuren, Ampeln, Kreuzungsfreigaben und Warteschlangen. Dienstfahrzeuge fahren über ihre Stationszufahrten ins Straßennetz. Wähle ein Fahrzeug und klicke auf sein Lenkradsymbol, um selbst zu fahren: **W/S** beschleunigt und fährt rückwärts, **A/D** lenkt, **Leertaste** betätigt die Handbremse und **Esc** beendet die Fahrt. Überlastete oder blockierte Straßen können weiterhin Staus verursachen.
 
 Mit dem Greifwerkzeug lassen sich Bewohner anheben und mit Ragdoll-Physik werfen. Schwere Kollisionen und Stürze können zu Todesfällen und sichtbarem Blut führen; beobachtete Vorfälle beeinflussen die Zufriedenheit. Brand, Erdbeben und Sturm sind im optionalen Katastrophen-Experimentiermodus verfügbar. Nach einer Katastrophe pausiert die Stadt zum Ansehen. Vor dem Fortsetzen oder unvereinbaren Änderungen kann die Aktion rückgängig gemacht werden.
+
+Gehaltene Bewohner bleiben über dem Boden. Sanftes Absetzen und Loslassen über der Oberfläche erhalten ihren tatsächlichen Ort; schnelle Schwünge behalten ihren Impuls auch bei winzigen letzten Mausbewegungen. Während des Festhaltens bewegen **WASD/Pfeiltasten** die Kamera und das Mausrad zoomt. Kamerabewegungen erzeugen keinen unbeabsichtigten Wurf. Die gelbe Auswahl folgt Gelände und Fundamenten und umfasst mehrteilige Grundstücke korrekt.
 
 Ländliche Gewerbegrundstücke können Bauernhofarchitektur entwickeln; ihre ländliche Identität bleibt im Spielstand erhalten. Wiesen ergänzen Gras, Blumen und Steine. Geeignete Seen bieten drei Windsurfern und einem Ruderboot eine geprüfte Route auf dem Wasser. Ein platzierbarer Uferstrand schafft weitere Freizeitmöglichkeiten; Kassel erhält ihn nicht automatisch. Flughäfen besitzen fünf Layoutvarianten mit Flugrouten, die auf Freiraum gegenüber ihren Terminalbauten geprüft werden.
 
@@ -62,21 +70,21 @@ Die [Easter-Egg-Assetdokumentation](public/assets/models/easter-egg-office-READM
 
 ## Steuerung
 
-| Eingabe | Funktion |
-| --- | --- |
-| Linksklick / links ziehen | Ausgewähltes Werkzeug anwenden |
-| W A S D / Pfeiltasten | Kamera bewegen |
-| M, dann links ziehen / mittlere Maustaste / Alt + links ziehen | Kamera verschieben |
-| Rechts ziehen ohne Entwurf / Q und E | Kamera drehen |
-| Mausrad | Zoomen |
-| 1 / 2 / 3 / 4 / 5 | Straße / Wohnen / Gewerbe / Industrie / Park |
-| B / V / C | Abreißen / auswählen / Bewohner greifen |
-| R | Großes Gebäude drehen |
-| Leertaste bei fokussierter Spielwelt | Pause / fortsetzen |
-| G / N / H / L | Raster / Tag oder Nacht / Hilfe / Stadtbeleuchtung |
-| Cmd/Strg + S | Speichern |
-| Cmd/Strg + Z | Verfügbare Bau- oder Katastrophenaktion rückgängig machen |
-| Esc | Entwurf abbrechen, Dialog schließen oder Fahrzeug verlassen |
+| Eingabe                                                        | Funktion                                                    |
+| -------------------------------------------------------------- | ----------------------------------------------------------- |
+| Linksklick / links ziehen                                      | Ausgewähltes Werkzeug anwenden                              |
+| W A S D / Pfeiltasten                                          | Kamera bewegen                                              |
+| M, dann links ziehen / mittlere Maustaste / Alt + links ziehen | Kamera verschieben                                          |
+| Rechts ziehen ohne Entwurf / Q und E                           | Kamera drehen                                               |
+| Mausrad                                                        | Zoomen                                                      |
+| 1 / 2 / 3 / 4 / 5                                              | Straße / Wohnen / Gewerbe / Industrie / Park                |
+| B / V / C                                                      | Abreißen / auswählen / Bewohner greifen                     |
+| R                                                              | Großes Gebäude drehen                                       |
+| Leertaste bei fokussierter Spielwelt                           | Pause / fortsetzen                                          |
+| G / N / H / L                                                  | Raster / Tag oder Nacht / Hilfe / Stadtbeleuchtung          |
+| Cmd/Strg + S                                                   | Speichern                                                   |
+| Cmd/Strg + Z                                                   | Verfügbare Bau- oder Katastrophenaktion rückgängig machen   |
+| Esc                                                            | Entwurf abbrechen, Dialog schließen oder Fahrzeug verlassen |
 
 Die Minikarte bewegt den Blick an eine Position; die Weltkugel zeigt die ganze Region und das Fadenkreuz die Innenstadt. In der Stadtverwaltung findest du Haushalt, Berichte, Wetter und Licht, Ziele, Katastrophen, Journal und Hilfe. Menüs unterstützen Tastaturbedienung, Scrollen in kleinen Fenstern und die Rückkehr zum vorherigen Fokus. Spielkürzel greifen nicht in Textfelder oder fokussierte Bedienelemente ein.
 

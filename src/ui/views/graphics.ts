@@ -40,14 +40,17 @@ export function renderGraphicsView(state: CityState, quality: string) {
         [
           'balanced',
           tr('Ausgewogen', 'Balanced'),
-          tr('Weiche Schatten und geglättete Kanten', 'Soft shadows and smooth edges'),
+          tr(
+            'Weiche Schatten und ruhigere Kanten mit MSAA + SMAA',
+            'Soft shadows and steadier edges with MSAA + SMAA',
+          ),
         ],
         [
           'ultra',
           tr('Sehr hoch', 'Ultra'),
           tr(
-            'Hohe Auflösung und feinere Schattendetails',
-            'High resolution and finer shadow detail',
+            'Hohe Auflösung, feinere Schatten und zusätzliche Kantenglättung',
+            'High resolution, finer shadows and additional edge smoothing',
           ),
         ],
       ] as const

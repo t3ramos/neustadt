@@ -79,6 +79,7 @@ export function createBuildingChunks(city: THREE.Group, live: THREE.Group, rock:
           )
             continue;
           const model = createTileModel(tile, state);
+          model.userData.pickAnchor = tile.z * state.size + tile.x;
           if (tile.kind === 'road') removeLegacyStreetlight(model, tile);
           if (tile.kind === 'road' || tile.kind === 'rail') {
             warpRoadModel(model, tile, state);

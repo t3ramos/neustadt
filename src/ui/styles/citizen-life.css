@@ -1,0 +1,262 @@
+.citizen-life {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.citizen-life :is(h3, h4, p, dl) {
+  margin: 0;
+}
+.citizen-life-heading,
+.citizen-life-routines h4,
+.citizen-life-event-heading,
+.citizen-life-event-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.citizen-life-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.citizen-life h3 {
+  font-size: 23px;
+  letter-spacing: -0.6px;
+}
+.citizen-life h4 {
+  font-size: 13px;
+  font-weight: 650;
+}
+.citizen-life .citizen-life-eyebrow {
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: var(--green);
+}
+.citizen-life-badge {
+  border: 1px solid #b8cbb1;
+  border-radius: 20px;
+  padding: 4px 10px;
+  color: #3c5c39;
+  background: #edf3e4;
+  font-size: 10px;
+  font-weight: 600;
+}
+.citizen-life-intro,
+.citizen-life-note,
+.citizen-life-status,
+.citizen-life dd + p {
+  color: var(--readable-muted);
+}
+.citizen-life-routines {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+}
+.citizen-life-routines h4 {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.citizen-life-routines h4 span {
+  color: var(--readable-muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+.citizen-life-routines dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 20px;
+}
+.citizen-life-routines dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.citizen-life dt {
+  color: var(--readable-muted);
+  overflow-wrap: anywhere;
+}
+.citizen-life dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.citizen-life-event {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: #edf2e5;
+  border: 1px solid #c7d7bd;
+  border-radius: 16px;
+}
+.citizen-life-event-heading {
+  align-items: flex-start;
+}
+.citizen-life-event-heading > span {
+  padding: 8px;
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--green);
+}
+.citizen-life-event-heading p {
+  overflow-wrap: anywhere;
+}
+.citizen-life-event-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.citizen-life-event-counts dt {
+  font-size: 10px;
+}
+.citizen-life-event-counts dd {
+  font-size: 22px;
+  line-height: 1.4;
+}
+.citizen-life .citizen-life-progress-label {
+  font-size: 10px;
+  margin-bottom: -8px;
+  color: var(--readable-muted);
+}
+.citizen-life progress {
+  width: 100%;
+  height: 7px;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #d6dfce;
+  accent-color: var(--green);
+}
+.citizen-life progress::-webkit-progress-bar {
+  background: #d6dfce;
+}
+.citizen-life progress::-webkit-progress-value {
+  background: var(--green);
+  border-radius: 8px;
+}
+.citizen-life progress::-moz-progress-bar {
+  background: var(--green);
+  border-radius: 8px;
+}
+.citizen-life button {
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+.citizen-life button:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 3px;
+}
+.citizen-life button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+.citizen-life button:not(:disabled):hover {
+  background: #e4eddb;
+  border-color: #9db78e;
+}
+.citizen-life-event-actions {
+  flex-wrap: wrap;
+}
+.citizen-life-event-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--paper);
+  font-size: 11px;
+  font-weight: 600;
+}
+.citizen-life-event-actions button:first-child {
+  flex: 1;
+}
+.citizen-life-event-actions button:last-child {
+  border-color: transparent;
+  background: transparent;
+}
+.citizen-life-invitations {
+  display: grid;
+  gap: 8px;
+}
+.citizen-life .citizen-life-resume {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--green);
+  color: var(--paper);
+  font-weight: 650;
+}
+.citizen-life .citizen-life-resume:hover {
+  background: #294c39;
+}
+.citizen-life-status {
+  font-size: 11px;
+}
+.citizen-life-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.citizen-life-action-grid button {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  background: var(--paper);
+}
+.citizen-life-action-grid button > span:first-child {
+  color: var(--green);
+}
+.citizen-life-action-grid strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.citizen-life-action-grid button > span:last-child {
+  font-size: 10px;
+  color: var(--readable-muted);
+}
+.citizen-life-note {
+  font-size: 10px;
+}
+.citizen-life-grab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  text-align: left;
+  background: #f2f1e8;
+}
+.citizen-life-grab > span:nth-child(2) {
+  flex: 1;
+}
+.citizen-life-grab strong,
+.citizen-life-grab small {
+  display: block;
+}
+.citizen-life-grab small {
+  color: var(--readable-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.citizen-life svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+  flex-shrink: 0;
+}
+@media (max-width: 380px) {
+  .citizen-life-action-grid,
+  .citizen-life-routines dl {
+    grid-template-columns: 1fr;
+  }
+  .citizen-life-event-counts dd {
+    font-size: 18px;
+  }
+}

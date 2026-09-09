@@ -232,6 +232,12 @@ export interface InteractionTarget {
   screenY: number;
 }
 export interface CitySceneApi {
+  getCitizenLife: () => import('./citizen-life').CitizenLifeSnapshot;
+  triggerCitizenEvent: (
+    kind: import('./citizen-life').CitizenEventKind,
+  ) => import('./citizen-life').CitizenEventResult;
+  focusCitizenEvent: () => void;
+  stopCitizenEvent: () => void;
   cancelInteraction: () => boolean;
   refreshLocale: () => void;
   getDiagnostics?: () => Record<string, unknown>;

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Neustadt · Grafikatelier</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #243934;
+        background: #e1e5df;
+        font:
+          14px system-ui,
+          sans-serif;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      header {
+        position: absolute;
+        top: 28px;
+        left: 34px;
+        pointer-events: none;
+      }
+      header small {
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #587469;
+      }
+      h1 {
+        font-size: clamp(24px, 3vw, 40px);
+        font-weight: 500;
+        margin: 10px 0;
+        letter-spacing: -0.045em;
+      }
+      p {
+        color: #5a6e64;
+        margin: 0;
+        max-width: 550px;
+        line-height: 1.6;
+      }
+      nav {
+        position: absolute;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 5px;
+        padding: 7px;
+        background: #fffffff0;
+        border: 1px solid #ccd5ce;
+        border-radius: 16px;
+        box-shadow: 0 10px 40px #173b2420;
+      }
+      button,
+      a {
+        border: 0;
+        border-radius: 10px;
+        padding: 13px 20px;
+        color: #314d40;
+        background: transparent;
+        font: inherit;
+        text-decoration: none;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      button[aria-pressed='true'] {
+        background: #355d4b;
+        color: white;
+      }
+      button:hover,
+      a:hover {
+        background: #dce8df;
+        color: #254b38;
+      }
+      #light {
+        position: absolute;
+        top: 28px;
+        right: 30px;
+        background: #ffffffe0;
+      }
+      footer {
+        position: absolute;
+        left: 34px;
+        bottom: 37px;
+        max-width: 260px;
+        color: #597064;
+        font-size: 12px;
+        line-height: 1.6;
+        pointer-events: none;
+      }
+      @media (max-width: 900px) {
+        footer {
+          bottom: 108px;
+        }
+        nav {
+          bottom: 20px;
+        }
+        button,
+        a {
+          padding: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <small>Neustadt · Grafikatelier</small>
+      <h1 id="title">Ein neues Stadtbild.</h1>
+      <p id="description">Die echten Spielmodelle in einer drehbaren Nahansicht.</p>
+    </header>
+    <button id="light">Abendlicht</button>
+    <nav aria-label="Modelle ansehen">
+      <button data-view="homes" aria-pressed="true">Wohnviertel</button>
+      <button data-view="skyline" aria-pressed="false">Skyline</button>
+      <button data-view="citizens" aria-pressed="false">Bewohner</button>
+      <button data-view="office" aria-pressed="false">Firmengebäude</button>
+      <button data-view="hero" aria-pressed="false">Skanderbeg</button>
+      <a href="/">Zum Spiel ↗</a>
+    </nav>
+    <footer>Ziehen: drehen · Mausrad: zoomen<br />Originalmodelle · Studiobeleuchtung</footer>
+    <script type="module" src="./graphics-showroom.ts"></script>
+  </body>
+</html>

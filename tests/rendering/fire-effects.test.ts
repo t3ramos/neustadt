@@ -450,8 +450,8 @@ test('new RCI architectures emit fire on actual roof triangles for all lot sizes
         [2, 3],
       ])
         for (const rotation of [0, 1, 2, 3] as const)
-          for (const level of [2, 3, 4]) {
-            if (variation === 0 && w === 1 && d === 1 && kind !== 'commercial') continue;
+          for (const level of kind === 'residential' ? [1, 2, 3, 4] : [2, 3, 4]) {
+            if (variation === 0 && w === 1 && d === 1 && kind === 'industrial') continue;
             const tile = {
               ...state.tiles[12 * state.size + 12],
               kind,
@@ -464,6 +464,7 @@ test('new RCI architectures emit fire on actual roof triangles for all lot sizes
             const model = createTileModel(tile, state);
             model.updateMatrixWorld(true);
             const roofs = getFirePatches(tile, state);
+            assert.ok(roofs.length > 0, `${kind} v${variation} L${level} must have fire surfaces`);
             for (const roof of roofs)
               for (const ux of [-0.35, 0, 0.35])
                 for (const uz of [-0.35, 0, 0.35]) {
@@ -478,7 +479,7 @@ test('new RCI architectures emit fire on actual roof triangles for all lot sizes
                   );
                   assert.ok(
                     Math.abs(hit.point.y - y) < 0.003,
-                    `${kind} v${variation}: roof height must match visible triangles`,
+                    `${kind} v${variation} ${w}x${d} level ${level} rot${rotation} (${x},${z}): roof ${y} must match visible ${hit.point.y} on ${hit.object.name}`,
                   );
                 }
           }

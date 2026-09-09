@@ -74,6 +74,7 @@ export function mountAppShell(category: string, drawerOpen: boolean, started: bo
     <button id="building-lights-btn" title="${tr('Stadtbeleuchtung ein-/ausschalten (L)', 'Toggle city lighting (L)')}" aria-label="${tr('Stadtbeleuchtung', 'City lighting')}" aria-pressed="true">${icon('lightbulb')}</button>
     <button id="grid-btn" title="${tr('Raster einblenden (G)', 'Toggle grid (G)')}" aria-pressed="false">${icon('grid-2x2')}</button>
     <button id="night-btn" title="${tr('Tag / Nacht (N)', 'Day / night (N)')}" aria-pressed="false">${icon('sun')}</button>
+    <button id="citizen-life-btn" title="${tr('Stadtleben: Bewohner, Treffen und Feste', 'City life: residents, gatherings and festivals')}" aria-label="${tr('Stadtleben', 'City life')}">${icon('users')}</button>
     </div>
     </div>
     <aside class="left-column">

@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as CANNON from 'cannon-es';
+import { citizenLimbJoint, createCitizenMaterials, createCitizenShoeGeometry } from './appearance';
+import {
+  citizenScreenHeight,
+  citizenUsesDetail,
+  createCitizenLodGeometries,
+} from './appearance-lod';
 import {
   ImpactDebris,
   DISMEMBERMENT_SPEED,
@@ -14,6 +20,15 @@ import { createDrivingCollisionWorld } from '../vehicles/collisions';
 import { facilityAccessSignature } from '../buildings/facility-access';
 import { sampleGroundHeight } from '../rendering/world/terrain';
 import { createPedestrianGraph, type PedestrianGraph } from './routing';
+import { createCitizenLife } from './life';
+import { createCitizenEventVenue, disposeCitizenEventVenue } from './event-venue';
+import { ThrowGesture } from './throw-gesture';
+import { createDoubleEagleGeometry, heritageAppearance } from './heritage-apparel';
+import type {
+  CitizenEventKind,
+  CitizenEventResult,
+  CitizenLifeSnapshot,
+} from '../domain/citizen-life';
 import {
   createCitizenSpeechSelector,
   type CitizenDialogueTopic,
@@ -306,6 +321,7 @@ export class CitizenRagdoll {
   private grabJoint: CANNON.PointToPointConstraint | null = null;
   private handTarget = new CANNON.Vec3();
   private handDelta = new CANNON.Vec3();
+  private heldGround: ((x: number, z: number) => number) | null = null;
   private reported = false;
   private released = false;
   private contacted = false;
@@ -314,12 +330,19 @@ export class CitizenRagdoll {
   age = 0;
   private stepHand = (): void => {
     if (!this.grab) return;
+    this.constrainHeldTarget(this.handTarget);
     this.handTarget.vsub(this.grab.position, this.handDelta);
     const distance = this.handDelta.length(),
       maximum = MAX_HAND_SPEED * Math.min(this.world.dt || 1 / 120, 0.05);
     if (distance > maximum) this.handDelta.scale(maximum / distance, this.handDelta);
     this.grab.position.vadd(this.handDelta, this.grab.position);
+    // The limited hand's intermediate position can cross an uphill slope even
+    // when its final target is safe. Keep the anchor above that support too.
+    this.constrainHeldTarget(this.grab.position);
     this.grab.aabbNeedsUpdate = true;
+  };
+  private supportHeldBody = (): void => {
+    if (this.grab && this.heldGround) this.clearGroundPenetration(this.heldGround);
   };
 
   constructor(
@@ -426,9 +449,10 @@ export class CitizenRagdoll {
     connect('rightLeg', [0.049, -0.11, 0], [0, 0.105, 0], 1.15, 0.5);
   }
 
-  hold(target: Vec): void {
+  hold(target: Vec, sampleHeight?: (x: number, z: number) => number): void {
     if (this.grab || this.disposed) return;
     this.released = false;
+    this.heldGround = sampleHeight ?? null;
     for (const body of Object.values(this.bodies)) {
       body.collisionFilterMask = BUILDING_GROUP;
       body.wakeUp();
@@ -441,7 +465,10 @@ export class CitizenRagdoll {
       position: new CANNON.Vec3(target.x, target.y, target.z),
     });
     this.handTarget.set(target.x, target.y, target.z);
+    this.constrainHeldTarget(this.handTarget);
+    this.grab.position.copy(this.handTarget);
     this.world.addEventListener('preStep', this.stepHand);
+    this.world.addEventListener('postStep', this.supportHeldBody);
     this.world.addBody(this.grab);
     this.grabJoint = new CANNON.PointToPointConstraint(
       this.bodies.torso,
@@ -451,6 +478,7 @@ export class CitizenRagdoll {
       1100,
     );
     this.world.addConstraint(this.grabJoint);
+    this.supportHeldBody();
   }
 
   move(target: Vec): void {
@@ -458,6 +486,8 @@ export class CitizenRagdoll {
     // The hand is speed-limited per physics step, so a long, fast pointer jump
     // cannot stretch the joints or inject hundreds of units/second of energy.
     this.handTarget.set(target.x, target.y, target.z);
+    this.constrainHeldTarget(this.handTarget);
+    this.supportHeldBody();
     for (const body of Object.values(this.bodies)) body.wakeUp();
   }
 
@@ -477,32 +507,76 @@ export class CitizenRagdoll {
     if (Number.isFinite(speed))
       this.severeVehicleImpactSpeed = Math.max(this.severeVehicleImpactSpeed, speed);
   }
-  /** Holding ignores terrain. Before release, place all articulated parts above
-   * their support surface without changing the pose or injecting velocity. */
-  clearGroundPenetration(sampleHeight: (x: number, z: number) => number): void {
-    let lift = 0;
-    for (const body of Object.values(this.bodies)) {
+  /** Translation required to support every part, including the uphill edge of
+   * its footprint. May be negative when a held pose has room to move downward. */
+  private requiredGroundLift(
+    sampleHeight: (x: number, z: number) => number,
+    dx = 0,
+    dz = 0,
+  ): number {
+    let lift = -Infinity;
+    for (const name of PARTS) {
+      const body = this.bodies[name];
       body.updateAABB();
-      lift = Math.max(
-        lift,
-        sampleHeight(body.position.x, body.position.z) + 0.002 - body.aabb.lowerBound.y,
-      );
+      const { lowerBound: low, upperBound: high } = body.aabb;
+      // Corners plus centre/edge midpoints handle slopes, pavement lips and
+      // support beneath rotated parts, rather than sampling only torso height.
+      for (let ix = 0; ix < 3; ix++)
+        for (let iz = 0; iz < 3; iz++) {
+          const height = sampleHeight(
+            low.x + ((high.x - low.x) * ix) / 2 + dx,
+            low.z + ((high.z - low.z) * iz) / 2 + dz,
+          );
+          if (Number.isFinite(height)) lift = Math.max(lift, height + 0.002 - low.y);
+        }
     }
+    return lift;
+  }
+
+  private constrainHeldTarget(target: Vec): void {
+    if (!this.heldGround) return;
+    target.y = Math.max(
+      target.y,
+      this.heldGround(target.x, target.z) + 0.32 * this.scale + 0.002,
+      this.position.y +
+        this.requiredGroundLift(
+          this.heldGround,
+          target.x - this.position.x,
+          target.z - this.position.z,
+        ),
+    );
+  }
+
+  /** Support correction runs after every held physics substep, and before
+   * release. Translate the entire pose and anchor together, without a spring
+   * pulling it back below terrain or turning the correction into throw energy. */
+  clearGroundPenetration(sampleHeight: (x: number, z: number) => number): void {
+    const lift = this.requiredGroundLift(sampleHeight);
     if (lift <= 0) return;
     for (const body of Object.values(this.bodies)) {
       body.position.y += lift;
+      if (this.grab) body.velocity.y = Math.max(0, body.velocity.y);
       body.previousPosition.copy(body.position);
       body.interpolatedPosition.copy(body.position);
       body.aabbNeedsUpdate = true;
+    }
+    if (this.grab) {
+      this.grab.position.y += lift;
+      this.grab.previousPosition.copy(this.grab.position);
+      this.grab.interpolatedPosition.copy(this.grab.position);
+      this.grab.aabbNeedsUpdate = true;
+      this.constrainHeldTarget(this.handTarget);
     }
   }
 
   private detach(): void {
     this.world.removeEventListener('preStep', this.stepHand);
+    this.world.removeEventListener('postStep', this.supportHeldBody);
     if (this.grabJoint) this.world.removeConstraint(this.grabJoint);
     if (this.grab) this.world.removeBody(this.grab);
     this.grabJoint = null;
     this.grab = null;
+    this.heldGround = null;
   }
 
   get position(): CANNON.Vec3 {
@@ -751,6 +825,7 @@ interface Citizen {
   crossing: boolean;
   waitUntil: number;
   dead: boolean;
+  detailed?: boolean;
 }
 interface Held {
   citizen: Citizen;
@@ -761,7 +836,7 @@ interface Held {
   velocity: THREE.Vector3;
   lastTime: number;
   lastMotionTime: number;
-  start: THREE.Vector3;
+  gesture: ThrowGesture;
 }
 interface Particle {
   position: THREE.Vector3;
@@ -773,10 +848,14 @@ interface Particle {
 export interface CitizenSystem {
   group: THREE.Group;
   update: (state: CityState, reset?: boolean) => void;
-  animate: (dt: number, walking: boolean) => void;
+  animate: (dt: number, walking: boolean, hour?: number) => void;
+  getLife: () => CitizenLifeSnapshot;
+  triggerEvent: (kind: CitizenEventKind, near: { x: number; z: number }) => CitizenEventResult;
+  stopEvent: () => void;
   pointerDown: (ray: THREE.Ray, cameraDirection: THREE.Vector3, time: number) => boolean;
   pointerMove: (ray: THREE.Ray, time: number) => boolean;
   pointerUp: (time: number) => boolean;
+  rebaseHeldCamera: (ray: THREE.Ray, cameraDirection: THREE.Vector3, time: number) => void;
   cancel: () => void;
   clearHover: () => void;
   setEnabled: (enabled: boolean) => void;
@@ -789,6 +868,8 @@ export interface CitizenSystem {
   getDebug: () => {
     count: number;
     rendered: number;
+    detailed: number;
+    distant: number;
     debris: number;
     ragdolls: number;
     recovering: number;
@@ -810,9 +891,11 @@ export interface CitizenSystem {
 export interface CitizenUiOptions {
   container: HTMLElement;
   getCamera: () => THREE.Camera;
+  /** Viewport height in screen pixels; defaults to container.clientHeight or 720. */
+  getViewportHeight?: () => number;
 }
 
-/** Detailed miniature crowds use 27 shared batches; only active actors enter physics. */
+/** 31 detail batches and three distant silhouette batches; only active actors enter physics. */
 export function createCitizens(
   initialState: CityState,
   onIncident?: (incident: Incident) => void,
@@ -829,11 +912,16 @@ export function createCitizens(
     nextComment = 16,
     lastObservation = -Infinity;
   const dialogue = new CitizenDialogue();
+  const life = createCitizenLife();
+  let lifeClock = 0;
   const speechSelector = createCitizenSpeechSelector(initialState.seed);
   let spawnWeights: number[] = [],
     spawnWeightTotal = 0;
   let renderCamera: THREE.Camera | null = null,
-    renderedCitizens = 0;
+    viewportHeight = 720,
+    renderedCitizens = 0,
+    detailedCitizens = 0,
+    distantCitizens = 0;
   const projectedCitizen = new THREE.Vector3();
   let nodes: number[] = [],
     police: THREE.Vector3[] = [],
@@ -856,6 +944,36 @@ export function createCitizens(
     particles: Particle[] = [];
   const group = new THREE.Group();
   group.name = 'city-citizens';
+  let eventVenue: THREE.Group | null = null,
+    eventVenueSignature = '';
+  function clearEventVenue(): void {
+    if (eventVenue) disposeCitizenEventVenue(eventVenue);
+    eventVenue = null;
+    eventVenueSignature = '';
+  }
+  function venueSiteSignature(site: { x: number; z: number }): string {
+    const x = Math.floor(site.x + state.size / 2),
+      z = Math.floor(site.z + state.size / 2);
+    const signature = [String(state.seed), String(state.size)];
+    // Furniture and overhanging obstacles are selected from this local area.
+    // Check it on city updates, not in the frame loop or on population changes.
+    for (let zz = Math.max(0, z - 2); zz <= Math.min(state.size - 1, z + 2); zz++)
+      for (let xx = Math.max(0, x - 2); xx <= Math.min(state.size - 1, x + 2); xx++) {
+        const tile = state.tiles[zz * state.size + xx];
+        signature.push(
+          `${tile.kind}:${tile.elevation}:${tile.variation}:${tile.level}:${tile.anchor}:${tile.fire}`,
+        );
+      }
+    return signature.join('|');
+  }
+  function syncEventVenue(checkSite = false): void {
+    const event = life.getSnapshot().event;
+    if (!event) clearEventVenue();
+    else if (eventVenue && checkSite && venueSiteSignature(event) !== eventVenueSignature) {
+      life.stopEvent();
+      clearEventVenue();
+    }
+  }
   const world = createCitizenPhysicsWorld();
   const impactDebris = new ImpactDebris(world, group);
   const statics = new Map<string, { body: CANNON.Body; signature: string }>();
@@ -870,7 +988,9 @@ export function createCitizens(
       i,
       headVertices.getX(i) * jaw,
       y,
-      headVertices.getZ(i) > 0 ? headVertices.getZ(i) * 0.9 : headVertices.getZ(i),
+      headVertices.getZ(i) > 0
+        ? headVertices.getZ(i) * (0.9 - 0.09 * Math.exp(-(((y - 0.12) / 0.12) ** 2)))
+        : headVertices.getZ(i),
     );
   }
   headGeometry.computeVertexNormals();
@@ -896,8 +1016,8 @@ export function createCitizens(
       [0.44, -0.38],
       [0.37, -0.08],
       [0.45, 0.28],
-      [0.6, 0.37],
-      [0.58, 0.42],
+      [0.52, 0.37],
+      [0.51, 0.42],
       [0.39, 0.47],
       [0.23, 0.5],
       [0, 0.5],
@@ -905,12 +1025,22 @@ export function createCitizens(
     16,
   );
   const torsoVertices = torsoGeometry.getAttribute('position');
-  for (let i = 0; i < torsoVertices.count; i++)
+  for (let i = 0; i < torsoVertices.count; i++) {
+    // Squared cloth cross-section: a broad chest and flatter front, with soft
+    // corners instead of a rotationally symmetric vase-shaped jacket.
+    const x = torsoVertices.getX(i),
+      z = torsoVertices.getZ(i);
+    const radius = Math.hypot(x, z);
+    if (radius > 0) {
+      torsoVertices.setX(i, Math.sign(x) * Math.pow(Math.abs(x) / radius, 0.72) * radius);
+      torsoVertices.setZ(i, Math.sign(z) * Math.pow(Math.abs(z) / radius, 0.72) * radius);
+    }
     torsoVertices.setZ(
       i,
       torsoVertices.getZ(i) *
         (1 - Math.min(1, Math.max(0, (torsoVertices.getY(i) - 0.25) / 0.1)) * 0.32),
     );
+  }
   torsoGeometry.computeVertexNormals();
   // Visible taper at wrist/ankle and articulation bulge at elbow/knee.
   const limbGeometry = profile(
@@ -927,7 +1057,22 @@ export function createCitizens(
     ],
     10,
   );
-  const shoeGeometry = new RoundedBoxGeometry(1, 1, 1, 2, 0.19),
+  // A rounded sleeve head extends into the shoulder volume. Its hidden cap is
+  // wider than a wrist/ankle cap, eliminating the separate capped-tube seam.
+  const sleeveGeometry = profile(
+    [
+      [0, -0.5],
+      [0.38, -0.5],
+      [0.42, -0.3],
+      [0.46, 0.12],
+      [0.54, 0.35],
+      [0.58, 0.47],
+      [0.4, 0.57],
+      [0, 0.61],
+    ],
+    10,
+  );
+  const shoeGeometry = createCitizenShoeGeometry(),
     backpackGeometry = new RoundedBoxGeometry(1, 1, 1, 1, 0.17);
   const handParts: THREE.BufferGeometry[] = [
     new THREE.SphereGeometry(0.5, 10, 6).scale(0.85, 0.65, 0.8).translate(0, 0.12, 0),
@@ -964,29 +1109,122 @@ export function createCitizens(
     hairSize = hairBounds.getSize(new THREE.Vector3());
   hairGeometry.translate(-hairCentre.x, -hairCentre.y, -hairCentre.z);
   hairGeometry.scale(1 / hairSize.x, 1 / hairSize.y, 1 / hairSize.z);
+  const hairVertices = hairGeometry.getAttribute('position');
+  for (let i = 0; i < hairVertices.count; i++) {
+    const x = hairVertices.getX(i),
+      y = hairVertices.getY(i),
+      z = hairVertices.getZ(i);
+    // Swept side part and a higher forehead; retain longer coverage at the nape.
+    hairVertices.setXYZ(i, x + Math.max(0, y) * 0.12, y + Math.max(0, z) * (0.18 + x * 0.16), z);
+  }
+  hairGeometry.computeVertexNormals();
   const merged = (parts: THREE.BufferGeometry[]) => {
     const normalized = parts.map((part) => (part.index ? part.toNonIndexed() : part)),
       geometry = mergeGeometries(normalized, false)!;
     for (const part of new Set([...parts, ...normalized])) part.dispose();
     return geometry;
   };
+  const eyePart = (geometry: THREE.BufferGeometry, tint: number) => {
+    const rgb = new THREE.Color(tint),
+      positions = geometry.getAttribute('position');
+    const colours = new Float32Array(positions.count * 3);
+    for (let i = 0; i < positions.count; i++) rgb.toArray(colours, i * 3);
+    geometry.setAttribute('color', new THREE.BufferAttribute(colours, 3));
+    return geometry;
+  };
+  const eyeGeometry = merged([
+    eyePart(new THREE.SphereGeometry(0.5, 8, 6).scale(1, 0.72, 0.5), 0xf1e5d9),
+    eyePart(
+      new THREE.SphereGeometry(0.5, 8, 4).scale(0.44, 0.55, 0.24).translate(0, 0, 0.23),
+      0x273639,
+    ),
+  ]);
   const browGeometry = merged([
     new THREE.BoxGeometry(0.026, 0.006, 0.008).rotateZ(-0.08).translate(-0.022, 0.023, 0.046),
     new THREE.BoxGeometry(0.026, 0.006, 0.008).rotateZ(0.08).translate(0.022, 0.023, 0.046),
   ]);
-  const garmentGeometry = merged([
-    new THREE.BoxGeometry(0.132, 0.012, 0.096).translate(0, -0.092, 0),
-    new THREE.BoxGeometry(0.032, 0.039, 0.009).translate(-0.036, 0.034, 0.053),
-    new THREE.BoxGeometry(0.006, 0.151, 0.012).translate(0, 0.011, 0.054),
-    new THREE.BoxGeometry(0.013, 0.147, 0.014).rotateZ(-0.11).translate(-0.047, 0.025, -0.057),
-    new THREE.BoxGeometry(0.013, 0.147, 0.014).rotateZ(0.11).translate(0.047, 0.025, -0.057),
-  ]);
+  // Sample the actual jacket's front surface, rather than floating a rectangular
+  // plate over a curved chest. This seam and its small buttons follow its contour.
+  const jacketMesh = new THREE.Mesh(torsoGeometry);
+  jacketMesh.scale.set(0.16, 0.23, 0.115);
+  jacketMesh.updateMatrixWorld();
+  const seamRay = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, 0, -1));
+  const jacketFront = (y: number) => {
+    seamRay.ray.origin.set(0, y, 1);
+    return (seamRay.intersectObject(jacketMesh)[0]?.point.z ?? 0.04) + 0.0005;
+  };
+  const seamPositions: number[] = [],
+    seamIndices: number[] = [];
+  for (let i = 0; i <= 12; i++) {
+    const y = -0.09 + i * 0.014,
+      z = jacketFront(y);
+    seamPositions.push(-0.0012, y, z, 0.0012, y, z);
+    if (i < 12) {
+      const a = i * 2;
+      seamIndices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  const shirtFrontGeometry = new THREE.BufferGeometry();
+  shirtFrontGeometry.setAttribute('position', new THREE.Float32BufferAttribute(seamPositions, 3));
+  shirtFrontGeometry.setIndex(seamIndices);
+  shirtFrontGeometry.computeVertexNormals();
+  const garmentGeometry = merged(
+    [0.06, 0.023, -0.014, -0.051].map((y) =>
+      new THREE.SphereGeometry(0.0022, 6, 3).scale(1, 1, 0.25).translate(0, y, jacketFront(y)),
+    ),
+  );
+  // The printed emblems follow the sweater surface on both sides, without
+  // floating rectangular patches or a new texture per citizen.
+  const emblem = (back: boolean) => {
+    const indexed = createDoubleEagleGeometry();
+    const source = indexed.toNonIndexed();
+    indexed.dispose();
+    const attribute = source.getAttribute('position');
+    const points: number[] = [];
+    const direction = back ? 1 : -1;
+    const stampRay = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, 0, direction));
+    const stamp = (a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2, depth = 0) => {
+      if (depth < 4 && Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) > 0.018) {
+        const ab = a.clone().add(b).multiplyScalar(0.5),
+          bc = b.clone().add(c).multiplyScalar(0.5),
+          ca = c.clone().add(a).multiplyScalar(0.5);
+        stamp(a, ab, ca, depth + 1);
+        stamp(ab, b, bc, depth + 1);
+        stamp(ca, bc, c, depth + 1);
+        stamp(ab, bc, ca, depth + 1);
+        return;
+      }
+      for (const p of back ? [c, b, a] : [a, b, c]) {
+        stampRay.ray.origin.set(p.x, p.y, -direction);
+        const z = stampRay.intersectObject(jacketMesh)[0]?.point.z ?? -direction * 0.04;
+        points.push(p.x, p.y, z - direction * 0.001);
+      }
+    };
+    for (let i = 0; i < attribute.count; i += 3) {
+      const p = [0, 1, 2].map(
+        (j) =>
+          new THREE.Vector2(attribute.getX(i + j) * 0.086, attribute.getY(i + j) * 0.096 + 0.005),
+      );
+      stamp(p[0], p[1], p[2]);
+    }
+    source.dispose();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+    geometry.computeVertexNormals();
+    return geometry;
+  };
+  const eagleFrontGeometry = emblem(false),
+    eagleBackGeometry = emblem(true);
+  (jacketMesh.material as THREE.Material).dispose();
   const mouthGeometry = new THREE.SphereGeometry(0.5, 8, 4);
   const collarGeometry = merged([
-    new THREE.BoxGeometry(0.035, 0.025, 0.012).rotateZ(-0.5).translate(-0.017, 0, 0),
-    new THREE.BoxGeometry(0.035, 0.025, 0.012).rotateZ(0.5).translate(0.017, 0, 0),
+    new THREE.BoxGeometry(0.03, 0.019, 0.002).rotateZ(-0.5).translate(-0.017, 0, 0),
+    new THREE.BoxGeometry(0.03, 0.019, 0.002).rotateZ(0.5).translate(0.017, 0, 0),
   ]);
-  const sharedMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82 });
+  const materials = createCitizenMaterials();
+  // Three enables geometry vertex colours only on the eyes. Other leather
+  // batches have no colour attribute and use its default white attribute.
+  materials.leather.vertexColors = true;
   const slots = [
     'torso',
     'head',
@@ -994,6 +1232,10 @@ export function createCitizens(
     'rightArm',
     'leftLeg',
     'rightLeg',
+    'leftForeArm',
+    'rightForeArm',
+    'leftLowerLeg',
+    'rightLowerLeg',
     'hat',
     'hair',
     'nose',
@@ -1015,48 +1257,73 @@ export function createCitizens(
     'mouth',
     'garmentDetails',
     'hairDetail',
+    'eagleFront',
+    'eagleBack',
   ] as const;
   const meshes = new Map<string, THREE.InstancedMesh>();
   for (const name of slots) {
     const geometry =
-      name === 'collar'
-        ? collarGeometry
-        : name === 'brows'
-          ? browGeometry
-          : name === 'garmentDetails'
-            ? garmentGeometry
-            : name === 'mouth'
-              ? mouthGeometry
-              : name === 'neck'
-                ? cuffGeometry
-                : name === 'hairDetail'
-                  ? earGeometry
-                  : name === 'head'
-                    ? headGeometry
-                    : name === 'hat'
-                      ? hatGeometry
-                      : name === 'torso'
-                        ? torsoGeometry
-                        : name === 'hair'
-                          ? hairGeometry
-                          : name === 'backpack'
-                            ? backpackGeometry
-                            : name === 'nose' || name.endsWith('Eye')
-                              ? noseGeometry
-                              : name.endsWith('Shoe')
-                                ? shoeGeometry
-                                : name === 'leftHand'
-                                  ? handGeometry
-                                  : name === 'rightHand'
-                                    ? rightHandGeometry
-                                    : name.endsWith('Ear')
-                                      ? earGeometry
-                                      : name.endsWith('Cuff')
-                                        ? cuffGeometry
-                                        : name.includes('Arm') || name.includes('Leg')
-                                          ? limbGeometry
-                                          : cube;
-    const mesh = new THREE.InstancedMesh(geometry, sharedMaterial, MAX_CITIZENS);
+      name === 'eagleFront'
+        ? eagleFrontGeometry
+        : name === 'eagleBack'
+          ? eagleBackGeometry
+          : name === 'shirtFront'
+            ? shirtFrontGeometry
+            : name === 'leftArm' || name === 'rightArm'
+              ? sleeveGeometry
+              : name === 'collar'
+                ? collarGeometry
+                : name === 'brows'
+                  ? browGeometry
+                  : name === 'garmentDetails'
+                    ? garmentGeometry
+                    : name === 'mouth'
+                      ? mouthGeometry
+                      : name === 'neck'
+                        ? cuffGeometry
+                        : name === 'hairDetail'
+                          ? earGeometry
+                          : name === 'head'
+                            ? headGeometry
+                            : name === 'hat'
+                              ? hatGeometry
+                              : name === 'torso'
+                                ? torsoGeometry
+                                : name === 'hair'
+                                  ? hairGeometry
+                                  : name === 'backpack'
+                                    ? backpackGeometry
+                                    : name.endsWith('Eye')
+                                      ? eyeGeometry
+                                      : name === 'nose'
+                                        ? noseGeometry
+                                        : name.endsWith('Shoe')
+                                          ? shoeGeometry
+                                          : name === 'leftHand'
+                                            ? handGeometry
+                                            : name === 'rightHand'
+                                              ? rightHandGeometry
+                                              : name.endsWith('Ear')
+                                                ? earGeometry
+                                                : name.endsWith('Cuff')
+                                                  ? cuffGeometry
+                                                  : name.includes('Arm') || name.includes('Leg')
+                                                    ? limbGeometry
+                                                    : cube;
+    const material =
+      name === 'head' ||
+      name === 'nose' ||
+      name === 'neck' ||
+      name.endsWith('Hand') ||
+      name.endsWith('Ear') ||
+      name === 'mouth'
+        ? materials.skin
+        : name.startsWith('hair') || name === 'brows'
+          ? materials.hair
+          : name.endsWith('Shoe') || name.endsWith('Eye') || name === 'backpack'
+            ? materials.leather
+            : materials.cloth;
+    const mesh = new THREE.InstancedMesh(geometry, material, MAX_CITIZENS);
     mesh.name = `citizen-${name}`;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.count = 0;
@@ -1064,6 +1331,26 @@ export function createCitizens(
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
     meshes.set(name, mesh);
+    group.add(mesh);
+  }
+  const lodGeometries = createCitizenLodGeometries();
+  const lodMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 1,
+    vertexColors: true,
+  });
+  const lodMeshes = new Map<string, THREE.InstancedMesh>();
+  for (const [name, geometry] of Object.entries(lodGeometries)) {
+    const mesh = new THREE.InstancedMesh(geometry, lodMaterial, MAX_CITIZENS);
+    mesh.name = `crowd-lod-${name}`;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.count = 0;
+    mesh.visible = false;
+    mesh.receiveShadow = true;
+    // Tiny moving limb shadows are another source of overview shimmer.
+    mesh.castShadow = false;
+    mesh.frustumCulled = false;
+    lodMeshes.set(name, mesh);
     group.add(mesh);
   }
   const splatMaterial = new THREE.MeshStandardMaterial({
@@ -1621,15 +1908,15 @@ export function createCitizens(
       reconnectWalker(citizen);
       return;
     }
-    const nearby = pedestrianGraph.neighbors(citizen.node),
-      onward = nearby.filter((edge) => edge.node !== citizen.previous),
-      all = onward.length ? onward : nearby;
-    const pavement = all.filter((edge) => !edge.crosswalk),
-      choices = pavement.length && random(citizen.id + elapsed) < 0.84 ? pavement : all;
-    const selected =
-        choices[
-          Math.floor(random(citizen.id + Math.floor(elapsed * 9) + citizen.node) * choices.length)
-        ],
+    const decision = life.step(citizen.id, citizen.node);
+    if (decision.waiting) {
+      citizen.crossing = false;
+      citizen.from.copy(citizen.position);
+      citizen.to.copy(citizen.position);
+      citizen.progress = 1;
+      return;
+    }
+    const selected = decision.edge,
       next = selected?.node ?? citizen.node;
     citizen.crossing = selected?.crosswalk ?? false;
     citizen.previous = citizen.node;
@@ -1688,6 +1975,7 @@ export function createCitizens(
       for (let i = citizens.length - 1; i >= 0 && citizens.length > target; i--)
         if (!citizens[i].ragdoll && !citizens[i].recovery) {
           dialogue.forget(citizens[i].id);
+          life.forget(citizens[i].id);
           citizens.splice(i, 1);
         }
   }
@@ -1734,6 +2022,17 @@ export function createCitizens(
       ]) {
         const x = tile.x + dx,
           z = tile.z + dz;
+        const neighbor =
+          x >= 0 && z >= 0 && x < state.size && z < state.size
+            ? state.tiles[z * state.size + x]
+            : undefined;
+        checksum = Math.imul(
+          checksum ^
+            (neighbor && neighbor.level > 0 && neighbor.fire === 0
+              ? ['residential', 'commercial', 'industrial'].indexOf(neighbor.kind) + 1
+              : 0),
+          16777619,
+        );
         checksum = Math.imul(
           checksum ^
             (x >= 0 &&
@@ -1772,6 +2071,7 @@ export function createCitizens(
     });
     nodeSet.clear();
     for (const node of nodes) nodeSet.add(node);
+    life.update(state, pedestrianGraph, nodeSet);
     police = state.tiles
       .filter((t) => t.kind === 'police' && (t.anchor < 0 || t.anchor === t.z * state.size + t.x))
       .map(
@@ -1891,6 +2191,9 @@ export function createCitizens(
       graphSignature = '';
       routeSignature = '';
       dialogue.clear();
+      life.reset();
+      clearEventVenue();
+      lifeClock = 0;
       speechSelector.clear();
       vehicleContacts.clear();
       observationCooldown.clear();
@@ -1915,6 +2218,7 @@ export function createCitizens(
         spawnClock = 0;
       }
     }
+    syncEventVenue(true);
     let observations = 0;
     for (let i = 0; i < state.tiles.length; i++) {
       const tile = state.tiles[i],
@@ -2023,22 +2327,14 @@ export function createCitizens(
       z = clamp(p.z, -state.size / 2 + 0.1, state.size / 2 - 0.1);
     const tile =
       state.tiles[Math.floor(z + state.size / 2) * state.size + Math.floor(x + state.size / 2)];
-    const node = nearestWalkNode(x, z, citizen.node) ?? citizen.node,
-      nearest = nodes.length
-        ? Math.hypot(nodePoint(node, citizen.id).x - x, nodePoint(node, citizen.id).z - z)
-        : Infinity;
+    const node = nearestWalkNode(x, z, citizen.node) ?? citizen.node;
     // Always reconnect at the landing neighbourhood, not the original route.
-    // A remote roof/field drop returns to the nearest safe sidewalk.
+    // A roof/water drop needs a safe sidewalk, but valid open ground retains
+    // the actual release point even far away from the pedestrian graph.
     if (nodes.length) {
       citizen.node = node;
       citizen.previous = -1;
-      if (
-        !tile ||
-        !['empty', 'road', 'park'].includes(tile.kind) ||
-        tile.elevation < 0 ||
-        nearest > 0.8 ||
-        !walkSegmentClear({ x, z }, nodePoint(node, citizen.id))
-      ) {
+      if (!tile || !['empty', 'road', 'park'].includes(tile.kind) || tile.elevation < 0) {
         const point = nodePoint(node, citizen.id);
         x = point.x;
         z = point.z;
@@ -2051,11 +2347,7 @@ export function createCitizens(
     citizen.from.copy(citizen.position);
     citizen.to.copy(citizen.position);
     citizen.progress = 1;
-    if (nodes.length) {
-      citizen.to.copy(nodePoint(citizen.node, citizen.id));
-      citizen.progress = 0;
-      if (citizen.position.distanceTo(citizen.to) < 0.08) nextNode(citizen);
-    }
+    if (nodes.length) reconnectWalker(citizen);
     if (physicalPose) {
       say(citizen, 'recovery', 'recovery');
       witnessReaction(citizen, citizen.position);
@@ -2087,7 +2379,8 @@ export function createCitizens(
         scale: citizen.scale,
         colors: {
           skin: skins[citizen.variant % skins.length],
-          shirt: shirts[citizen.variant % shirts.length],
+          shirt:
+            heritageAppearance(citizen.variant)?.sweater ?? shirts[citizen.variant % shirts.length],
           pants: trousers[citizen.variant % trousers.length],
         },
         normal,
@@ -2188,7 +2481,7 @@ export function createCitizens(
       pending.push({ citizen, hit }),
     );
     const target = new THREE.Vector3(origin.x, origin.y + 0.32 * citizen.scale, origin.z);
-    citizen.ragdoll.hold(target);
+    citizen.ragdoll.hold(target, ground);
     // Vertical camera-facing plane: an upward cursor movement really lifts the
     // person. Horizontal cursor movement carries them sideways through the city.
     const normal = new THREE.Vector3(cameraDirection.x, 0, cameraDirection.z).normalize();
@@ -2204,8 +2497,9 @@ export function createCitizens(
       velocity: new THREE.Vector3(),
       lastTime: time,
       lastMotionTime: time,
-      start: origin,
+      gesture: new ThrowGesture(),
     };
+    held.gesture.reset(target, time);
     hovered = citizen;
     say(citizen, 'held', 'held');
     ensureColliders();
@@ -2220,8 +2514,13 @@ export function createCitizens(
     const hit = ray.intersectPlane(held.plane, new THREE.Vector3());
     if (!hit) return true;
     hit.add(held.offset);
-    hit.y = clamp(hit.y, -5, 50);
+    const minimumY = ground(hit.x, hit.z) + 0.32 * held.citizen.scale + 0.002;
+    const groundClamped = hit.y <= minimumY;
+    hit.y = Math.max(minimumY, Math.min(hit.y, 50));
     const movement = hit.clone().sub(held.last);
+    const gestureMovement = movement.clone();
+    if (groundClamped) gestureMovement.y = 0;
+    held.gesture.move(gestureMovement, time);
     // Pointer-up supplies the final coordinates again. A duplicate sample is
     // not a stopped hand: retain the recent real motion, but do not extend its
     // lifetime. A genuine pause still expires it in pointerUp below.
@@ -2229,9 +2528,12 @@ export function createCitizens(
       const dt = clamp((time - held.lastTime) / 1000, 0.008, 0.2);
       movement.divideScalar(dt);
       if (movement.length() > MAX_HAND_SPEED) movement.setLength(MAX_HAND_SPEED);
-      held.velocity.copy(movement);
+      held.velocity.copy(held.gesture.velocity(time, MAX_HAND_SPEED));
       held.lastMotionTime = time;
     }
+    // Pressing into support is placement intent. Neither a rejected downward
+    // motion nor an uphill support correction becomes vertical throw momentum.
+    if (groundClamped) held.velocity.y = 0;
     held.last.copy(hit);
     held.lastTime = time;
     held.target.copy(hit);
@@ -2246,7 +2548,7 @@ export function createCitizens(
       ragdoll = citizen.ragdoll;
     if (!ragdoll) return true;
     const p = ragdoll.position;
-    if (time - current.lastMotionTime > 140) current.velocity.set(0, 0, 0);
+    current.velocity.copy(current.gesture.velocity(time, MAX_HAND_SPEED));
     if (Math.abs(p.x) > state.size / 2 || Math.abs(p.z) > state.size / 2) {
       incident(citizen, 'abduction', p, { x: 0, y: 1, z: 0 });
       return true;
@@ -2259,11 +2561,26 @@ export function createCitizens(
     }
     return true;
   }
+  function rebaseHeldCamera(ray: THREE.Ray, direction: THREE.Vector3, time: number): void {
+    if (!held) return;
+    const normal = new THREE.Vector3(direction.x, 0, direction.z).normalize();
+    if (normal.lengthSq() < 0.001) normal.set(0, 0, -1);
+    held.plane.setFromNormalAndCoplanarPoint(normal, held.target);
+    const hit = ray.intersectPlane(held.plane, new THREE.Vector3());
+    if (hit) held.offset.copy(held.target).sub(hit);
+    held.last.copy(held.target);
+    held.lastTime = time;
+    held.velocity.set(0, 0, 0);
+    held.gesture.reset(held.target, time);
+  }
   function cancel(): void {
     if (held) {
       const current = held;
       held = null;
-      recover(current.citizen, current.start);
+      // Escape, capture loss and tool changes stop carrying at the actual
+      // location. They must never teleport the resident back to pickup.
+      current.citizen.ragdoll?.clearGroundPenetration(ground);
+      recover(current.citizen);
     }
     hovered = null;
     if (handBadge) handBadge.style.display = 'none';
@@ -2288,13 +2605,28 @@ export function createCitizens(
     color.set(c);
     mesh.setColorAt(index, color);
   }
+  const limbStart = new THREE.Vector3(),
+    limbEnd = new THREE.Vector3(),
+    limbJoint = new THREE.Vector3(),
+    limbScratch = new THREE.Vector3(),
+    limbForward = new THREE.Vector3(),
+    limbCentre = new THREE.Vector3(),
+    limbRotation = new THREE.Quaternion(),
+    limbBasisInverse = new THREE.Quaternion(),
+    limbUp = new THREE.Vector3(0, 1, 0);
   function renderCitizens(): void {
-    let index = 0;
+    let index = 0,
+      distantIndex = 0;
     for (const citizen of citizens)
       if (!citizen.dead) {
         // Simulation keeps every pedestrian. Only small visual detail outside a
         // generous camera margin is omitted; interaction actors are never culled.
-        if (renderCamera && !citizen.ragdoll && !citizen.recovery) {
+        const interactionDetail =
+          !!citizen.ragdoll ||
+          !!citizen.recovery ||
+          citizen === held?.citizen ||
+          citizen === hovered;
+        if (renderCamera && !interactionDetail) {
           projectedCitizen.copy(citizen.position);
           projectedCitizen.y += 0.12;
           projectedCitizen.project(renderCamera);
@@ -2308,8 +2640,32 @@ export function createCitizens(
         }
         const s = citizen.scale,
           skin = skins[citizen.variant % skins.length],
-          shirt = shirts[citizen.variant % shirts.length],
+          heritage = heritageAppearance(citizen.variant),
+          shirt = heritage?.sweater ?? shirts[citizen.variant % shirts.length],
           pants = trousers[citizen.variant % trousers.length];
+        const build = heritage ? 1.1 : [0.94, 1.04, 1.12][citizen.variant % 3];
+        citizen.detailed =
+          !renderCamera ||
+          interactionDetail ||
+          citizenUsesDetail(
+            citizenScreenHeight(renderCamera, citizen.position, 0.58 * s, viewportHeight),
+            citizen.detailed,
+          );
+        if (!citizen.detailed) {
+          // Skip the detailed matrices, limb articulation and tiny surface marks entirely.
+          // The same simulation actor still walks, collides, speaks and can be picked.
+          dummy.position.copy(citizen.position);
+          dummy.quaternion.setFromAxisAngle(axisY, citizen.heading);
+          for (const [name, mesh] of lodMeshes) {
+            dummy.scale.set(s * (name === 'upper' ? build : 1), s, s);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(distantIndex, dummy.matrix);
+            color.set(name === 'head' ? skin : name === 'lower' ? pants : shirt);
+            mesh.setColorAt(distantIndex, color);
+          }
+          distantIndex++;
+          continue;
+        }
         const articulated = !!citizen.ragdoll || !!citizen.recovery;
         const gait = citizenWalkingGait(citizen.phase, s),
           blend = articulated ? 0 : citizen.gaitBlend;
@@ -2355,7 +2711,10 @@ export function createCitizens(
                 .applyQuaternion(heading)
                 .add(citizen.position);
             } else if (name.includes('Arm')) {
-              const swing = Math.cos(citizen.phase) * 0.34 * blend * (name === 'leftArm' ? 1 : -1);
+              const social = life.getActorStatus(citizen.id)?.activity === 'socialising';
+              const swing = social
+                ? -0.8 + Math.sin(lifeClock * 4 + citizen.id) * 0.3
+                : Math.cos(citizen.phase) * 0.34 * blend * (name === 'leftArm' ? 1 : -1);
               rotations[name].multiply(
                 new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), swing),
               );
@@ -2363,7 +2722,7 @@ export function createCitizens(
                 .applyQuaternion(rotations[name])
                 .add(
                   new THREE.Vector3(
-                    (name === 'leftArm' ? -0.1 : 0.1) * s,
+                    (name === 'leftArm' ? -0.078 : 0.078) * s * build,
                     0.415 * s,
                     0,
                   ).applyQuaternion(heading),
@@ -2380,20 +2739,79 @@ export function createCitizens(
           // Bring the sleeves into the shoulder seam; the physical joints retain their tested envelope.
           if (articulated && name.includes('Arm'))
             positions[name].add(
-              new THREE.Vector3(name === 'leftArm' ? 0.02 : -0.02, -0.012, 0)
+              new THREE.Vector3(name === 'leftArm' ? 0.042 : -0.042, -0.012, 0)
                 .multiplyScalar(s)
                 .applyQuaternion(rotations[name]),
             );
-          drawPart(
-            name,
-            index,
-            positions[name],
-            rotations[name],
-            size[0] * s * (name === 'head' ? 0.82 : 1),
-            legLengths[name] ?? size[1] * s * (name === 'head' ? 0.82 : 1),
-            size[2] * s * (name === 'head' ? 0.9 : 1),
-            name === 'head' ? skin : name.includes('Leg') ? pants : shirt,
-          );
+          if (name.includes('Arm') || name.includes('Leg')) {
+            const length = legLengths[name] ?? size[1] * s;
+            limbStart
+              .set(0, length / 2, 0)
+              .applyQuaternion(rotations[name])
+              .add(positions[name]);
+            limbEnd
+              .set(0, -length / 2, 0)
+              .applyQuaternion(rotations[name])
+              .add(positions[name]);
+            limbForward.set(0, 0, 1).applyQuaternion(heading);
+            citizenLimbJoint(
+              limbStart,
+              limbEnd,
+              limbForward,
+              (name.includes('Leg') ? 0.108 : 0.113) * s,
+              articulated ? 0 : name.includes('Arm') ? -1 : 1,
+              limbJoint,
+              limbScratch,
+            );
+            const segment = (slot: string, a: THREE.Vector3, b: THREE.Vector3, width: number) => {
+              limbScratch.subVectors(a, b);
+              const segmentLength = limbScratch.length();
+              limbBasisInverse.copy(rotations[name]).invert();
+              limbRotation
+                .setFromUnitVectors(
+                  limbUp,
+                  limbScratch.normalize().applyQuaternion(limbBasisInverse),
+                )
+                .premultiply(rotations[name]);
+              limbCentre.copy(a).add(b).multiplyScalar(0.5);
+              drawPart(
+                slot,
+                index,
+                limbCentre,
+                limbRotation,
+                size[0] * s * width,
+                segmentLength + 0.008 * s,
+                size[2] * s * width,
+                name.includes('Leg') ? pants : shirt,
+              );
+            };
+            segment(name, limbStart, limbJoint, 1);
+            segment(
+              name.replace('Arm', 'ForeArm').replace('Leg', 'LowerLeg'),
+              limbJoint,
+              limbEnd,
+              0.86,
+            );
+            if (name.includes('Arm')) {
+              // Existing hand/cuff offsets are measured from a full limb centre.
+              // Rebase this virtual parent onto the bent forearm at the wrist.
+              rotations[name].copy(limbRotation);
+              positions[name]
+                .set(0, (size[1] * s) / 2, 0)
+                .applyQuaternion(limbRotation)
+                .add(limbEnd);
+            }
+          } else
+            drawPart(
+              name,
+              index,
+              positions[name],
+              rotations[name],
+              size[0] * s * (name === 'head' ? 0.82 : name === 'torso' ? build : 1),
+              legLengths[name] ?? size[1] * s * (name === 'head' ? 0.82 : 1),
+              size[2] * s * (name === 'head' ? 0.9 : 1),
+              name === 'head' ? skin : name.includes('Leg') ? pants : shirt,
+            );
         }
         const detail = (
           name: string,
@@ -2407,7 +2825,7 @@ export function createCitizens(
             local
               .set(
                 (name === 'leftShoe' ? -0.049 : 0.049) * s,
-                0.026 * s + foot.lift * blend,
+                0.02 * s + foot.lift * blend,
                 foot.forward * blend + 0.015 * s,
               )
               .applyQuaternion(heading)
@@ -2428,7 +2846,7 @@ export function createCitizens(
           'head',
           [0, 0.066, 0],
           wearsHat ? [0.12, 0.036, 0.128] : [0, 0, 0],
-          citizen.variant % 2 ? 0x9d8557 : shirt,
+          heritage ? 0x686282 : citizen.variant % 2 ? 0x9d8557 : shirt,
         );
         const longHair = citizen.variant % 5 === 1;
         detail(
@@ -2438,9 +2856,9 @@ export function createCitizens(
           longHair ? [0.09, 0.108, 0.072] : [0.092, 0.034, 0.094],
           hairs[citizen.variant % 4],
         );
-        detail('nose', 'head', [0, -0.002, 0.044], [0.016, 0.024, 0.022], skin);
-        detail('leftEye', 'head', [-0.019, 0.012, 0.041], [0.007, 0.008, 0.009], 0x2c373b);
-        detail('rightEye', 'head', [0.019, 0.012, 0.041], [0.007, 0.008, 0.009], 0x2c373b);
+        detail('nose', 'head', [0, -0.002, 0.044], [0.0136, 0.024, 0.0242], skin);
+        detail('leftEye', 'head', [-0.019, 0.012, 0.038], [0.012, 0.00765, 0.009], 0xffffff);
+        detail('rightEye', 'head', [0.019, 0.012, 0.038], [0.012, 0.00765, 0.009], 0xffffff);
         detail(
           'backpack',
           'torso',
@@ -2448,50 +2866,52 @@ export function createCitizens(
           citizen.variant % 4 === 0 ? [0.1, 0.13, 0.055] : [0, 0, 0],
           citizen.variant % 2 ? 0xa68a58 : 0x78573e,
         );
-        detail('leftShoe', 'leftLeg', [0, -0.079, 0.015], [0.069, 0.052, 0.105], 0x354044);
-        detail('rightShoe', 'rightLeg', [0, -0.079, 0.015], [0.069, 0.052, 0.105], 0x354044);
+        detail('leftShoe', 'leftLeg', [0, -0.085, 0.015], [0.062, 0.04, 0.096], 0x354044);
+        detail('rightShoe', 'rightLeg', [0, -0.085, 0.015], [0.062, 0.04, 0.096], 0x354044);
         detail(
           'shirtFront',
           'torso',
-          [0, 0.025, 0.055],
-          citizen.variant % 3 === 1 ? [0, 0, 0] : [0.065, 0.16, 0.008],
-          citizen.variant % 3 === 0 ? 0xd1c8b5 : citizen.variant % 3 === 1 ? 0x617076 : 0x9caa9b,
+          [0, 0, 0],
+          heritage || citizen.variant % 3 === 1 ? [0, 0, 0] : [build, 1, 1],
+          shirt,
         );
         detail(
           'collar',
           'torso',
-          [0, 0.098, 0.047],
-          citizen.variant % 3 === 1 ? [0, 0, 0] : [1, 1, 1],
+          [0, 0.085, 0.038],
+          heritage || citizen.variant % 3 === 1 ? [0, 0, 0] : [1, 1, 1],
           0xded8c5,
         );
-        detail('leftHand', 'leftArm', [0, -0.105, 0], [0.043, 0.045, 0.047], skin);
-        detail('rightHand', 'rightArm', [0, -0.105, 0], [0.043, 0.045, 0.047], skin);
+        detail('leftHand', 'leftArm', [0, -0.121, 0], [0.034, 0.037, 0.032], skin);
+        detail('rightHand', 'rightArm', [0, -0.121, 0], [0.034, 0.037, 0.032], skin);
         detail('leftEar', 'head', [-0.044, -0.003, -0.006], [0.013, 0.024, 0.017], skin);
         detail('rightEar', 'head', [0.044, -0.003, -0.006], [0.013, 0.024, 0.017], skin);
         detail(
           'leftCuff',
           'leftArm',
-          [0, -0.09, 0],
-          [0.053, 0.026, 0.058],
-          citizen.variant % 3 === 0 ? 0xd6d4c3 : shirt,
+          [0, -0.098, 0],
+          [0.04, 0.017, 0.047],
+          !heritage && citizen.variant % 3 === 0 ? 0xd6d4c3 : shirt,
         );
         detail(
           'rightCuff',
           'rightArm',
-          [0, -0.09, 0],
-          [0.053, 0.026, 0.058],
-          citizen.variant % 3 === 0 ? 0xd6d4c3 : shirt,
+          [0, -0.098, 0],
+          [0.04, 0.017, 0.047],
+          !heritage && citizen.variant % 3 === 0 ? 0xd6d4c3 : shirt,
         );
         detail('neck', 'head', [0, -0.06, -0.002], [0.043, 0.035, 0.043], skin);
-        detail('brows', 'head', [0, 0, 0], [0.87, 0.87, 0.93], hairs[citizen.variant % 4]);
-        detail('mouth', 'head', [0, -0.024, 0.041], [0.023, 0.004, 0.006], 0x885d51);
+        detail('brows', 'head', [0, 0.005, 0], [0.957, 0.6525, 0.93], hairs[citizen.variant % 4]);
+        detail('mouth', 'head', [0, -0.024, 0.041], [0.0207, 0.0026, 0.006], 0x885d51);
         detail(
           'garmentDetails',
           'torso',
           [0, 0, 0],
-          citizen.variant % 3 === 1 ? [0, 0, 0] : [1, 1, 1],
-          citizen.variant % 3 === 0 ? 0x4c4c48 : 0x69716c,
+          heritage || citizen.variant % 3 === 1 ? [0, 0, 0] : [build, 1, 1],
+          0x9f998c,
         );
+        detail('eagleFront', 'torso', [0, 0, 0], heritage ? [build, 1, 1] : [0, 0, 0], 0x080808);
+        detail('eagleBack', 'torso', [0, 0, 0], heritage ? [build, 1, 1] : [0, 0, 0], 0x080808);
         const bun = citizen.variant % 5 === 2,
           fringe = citizen.variant % 5 === 3;
         detail(
@@ -2509,17 +2929,35 @@ export function createCitizens(
         );
         index++;
       }
-    renderedCitizens = index;
+    detailedCitizens = index;
+    distantCitizens = distantIndex;
+    renderedCitizens = index + distantIndex;
     for (const mesh of meshes.values()) {
       mesh.count = index;
+      mesh.visible = index > 0;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+    for (const mesh of lodMeshes.values()) {
+      mesh.count = distantIndex;
+      mesh.visible = distantIndex > 0;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
   }
-  function animate(dt: number, walking: boolean): void {
+  function animate(dt: number, walking: boolean, hour = state.settings.timeOfDay): void {
     renderCamera = ui?.getCamera() ?? null;
+    // The camera may depend on engine systems created after this constructor.
+    const requestedHeight = ui?.getViewportHeight?.() ?? ui?.container.clientHeight;
+    viewportHeight =
+      requestedHeight && Number.isFinite(requestedHeight) && requestedHeight > 0
+        ? requestedHeight
+        : 720;
     dt = clamp(dt, 0, 0.05);
     elapsed += dt;
+    if (walking) lifeClock += dt;
+    life.advance(dt, walking, hour);
+    syncEventVenue();
     spawnClock += dt;
     for (const citizen of citizens) {
       if (citizen.dead) continue;
@@ -2535,8 +2973,11 @@ export function createCitizens(
         if (!citizen.ragdoll.held) citizen.ragdoll.age += dt;
         continue;
       }
+      if (walking && citizen.progress >= 1) nextNode(citizen);
+      const waiting = life.getActorStatus(citizen.id)?.waiting === true && citizen.progress >= 1;
       const moving =
         walking &&
+        !waiting &&
         nodes.length > 0 &&
         elapsed >= citizen.waitUntil &&
         !crosswalkHasTraffic(citizen);
@@ -2593,7 +3034,11 @@ export function createCitizens(
       for (const value of statics.values()) world.removeBody(value.body);
       statics.clear();
     }
-    for (let i = citizens.length - 1; i >= 0; i--) if (citizens[i].dead) citizens.splice(i, 1);
+    for (let i = citizens.length - 1; i >= 0; i--)
+      if (citizens[i].dead) {
+        life.forget(citizens[i].id);
+        citizens.splice(i, 1);
+      }
     if (spawnClock > 20) {
       spawn();
       spawnClock = 0;
@@ -2643,15 +3088,44 @@ export function createCitizens(
     rebuildActorIndex();
     updateUi();
   }
+  life.advance(0, true, initialState.settings.timeOfDay);
   update(initialState);
   renderCitizens();
   return {
     group,
     update,
     animate,
+    getLife: () => life.getSnapshot(),
+    triggerEvent(kind, near) {
+      const candidates = citizens
+        .filter((c) => !c.dead && !c.ragdoll && !c.recovery)
+        .map((c) => ({ id: c.id, node: c.node, x: c.position.x, z: c.position.z }));
+      let preparedVenue: THREE.Group | null = null;
+      const result = life.trigger(kind, near, candidates, (site) => {
+        const venue = createCitizenEventVenue(state, site);
+        if (!venue.userData.eventVenue.placed || !venue.children.length) {
+          disposeCitizenEventVenue(venue);
+          return false;
+        }
+        preparedVenue = venue;
+        return true;
+      });
+      if (result.ok && preparedVenue) {
+        clearEventVenue();
+        eventVenue = preparedVenue;
+        eventVenueSignature = venueSiteSignature(result.event);
+        group.add(eventVenue);
+      }
+      return result;
+    },
+    stopEvent() {
+      life.stopEvent();
+      clearEventVenue();
+    },
     pointerDown,
     pointerMove,
     pointerUp,
+    rebaseHeldCamera,
     cancel,
     sweepVehicleImpact,
     notifyObservation,
@@ -2680,6 +3154,8 @@ export function createCitizens(
       return {
         count: citizens.length,
         rendered: renderedCitizens,
+        detailed: detailedCitizens,
+        distant: distantCitizens,
         debris: impactDebris.activeCount,
         ragdolls: citizens.filter((c) => c.ragdoll).length,
         recovering: citizens.filter((c) => c.recovery).length,
@@ -2722,24 +3198,38 @@ export function createCitizens(
         hatGeometry,
         torsoGeometry,
         limbGeometry,
+        sleeveGeometry,
         shoeGeometry,
         backpackGeometry,
         handGeometry,
         rightHandGeometry,
         noseGeometry,
+        eyeGeometry,
         earGeometry,
         cuffGeometry,
         hairGeometry,
         browGeometry,
         garmentGeometry,
+        shirtFrontGeometry,
         mouthGeometry,
         collarGeometry,
+        eagleFrontGeometry,
+        eagleBackGeometry,
         particleGeometry,
+        ...Object.values(lodGeometries),
       ])
         geometry.dispose();
-      for (const material of [sharedMaterial, splatMaterial, particleMaterial]) material.dispose();
+      for (const material of [
+        ...Object.values(materials),
+        lodMaterial,
+        splatMaterial,
+        particleMaterial,
+      ])
+        material.dispose();
       for (const child of decals.children) (child as THREE.Mesh).geometry.dispose();
       dialogue.clear();
+      life.reset();
+      clearEventVenue();
       overlay?.remove();
       group.removeFromParent();
     },

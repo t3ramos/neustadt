@@ -35,7 +35,7 @@ const makeFocus = new Function(
   'callbacks',
   'driving',
   'exitDrive',
-  `let selected; const size=state.size; ${body};return focus;`,
+  `let selected; const size=state.size; function refreshSelection(){ selection.visible = true; } ${body};return focus;`,
 );
 
 test('building close-up centers its actual footprint at desktop and portrait aspect ratios', () => {
@@ -103,8 +103,7 @@ test('building close-up centers its actual footprint at desktop and portrait asp
       'orbit pivot stays on the building, not a nearby park',
     );
     assert.deepEqual(selected, { x: 34, z: 48 });
-    assert.equal(selection.position.x, center.x);
-    assert.equal(selection.position.z, center.z);
+    assert.equal(selection.visible, true, 'focus refreshes the shared ground-conforming selection');
   }
 });
 

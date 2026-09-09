@@ -29,6 +29,16 @@ Constraints: completely original architecture and composition; no text, letters,
 
 The playable 3D assets are original project code. Geometry, colors, materials, and deterministic variants are assembled locally at startup. No models or textures from SimCity 2000 are used.
 
+### v3.1.0 additions
+
+Residential details, curved commercial geometry, roof relief, shared facade textures, resident facial/clothing geometry and temporary event furniture are original procedural project assets. No photographic textures or downloaded character models are included.
+
+The red sweater's black double-headed eagle is an original simplified geometry drawing based on the public-domain Albanian national flag, with [Wikimedia's flag reference](https://commons.wikimedia.org/wiki/File:Flag_of_Albania.svg) used only for visual guidance. The source SVG is not bundled. Front/back prints are conformed to the sweater mesh.
+
+The mounted Skanderbeg is an original stylized horse-and-rider model. The goat-crested helmet refers to the [Kunsthistorisches Museum's Skanderbeg presentation](https://www.khm.at/en/exhibitions/imperial-armoury/skanderbeg). Armor, red cloak, horse, tack and animation are artistic choices, not an exact historical reconstruction. No museum photograph, scan or other museum asset is redistributed.
+
+The office refinement preserves the previously supplied GLB and its provenance; only terrace geometry is added. Official BCIS photographs were used for facade comparison, not embedded or redistributed. See the [office asset documentation](public/assets/models/easter-egg-office-README.md).
+
 - **Buildings and facilities:** original houses, duplexes, compact apartment blocks, blue commercial high-rises with Manhattan-inspired silhouettes, and sawtooth-roof factories. Large continuous models cover the power plant, waterworks, police and fire stations, clinic, school, university, recycling center, stadium, airport, and seaport. Stadium activity, aircraft movements, and other facility details have original animations.
 - **Building style and windows:** solid stylized structures with original facades, roof details, and opaque window materials. Building and window lights can be switched independently of the time of day. Building geometry also supplies collision bounds for residents and vehicles.
 - **Terrain and roads:** saved terrain heights, coasts and hills, original repeatable grass materials with color, normal, and roughness maps, and roads and bridges that follow terrain elevation. Material maps are generated locally.

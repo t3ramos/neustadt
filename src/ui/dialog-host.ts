@@ -57,6 +57,7 @@ export function createDialogHost(options: DialogOptions) {
       ['menu', 'building-2', tr('Meine Stadt', 'My city')],
       ['budget', 'landmark', tr('Haushalt', 'Budget')],
       ['reports', 'chart-no-axes-combined', tr('Berichte', 'Reports')],
+      ['citizen-life', 'users', tr('Stadtleben', 'City life')],
       ['graphics', 'cloud-sun', tr('Wetter & Licht', 'Weather & light')],
       ['audio', 'music-2', tr('Klang & Musik', 'Sound & music')],
       ['disaster', 'flame', tr('Katastrophen', 'Disasters')],
